@@ -829,15 +829,196 @@ class ExampleRobolectricTest {
   @Test
   fun testAllSourceTemplatesPresentAndValid() {
     val templates = MediaSourceConfig.SOURCE_TEMPLATES
-    assertEquals(6, templates.size)
+    assertEquals(4, templates.size)
 
     val templateNames = templates.map { it.name }
-    assertTrue(templateNames.any { it.contains("Safebooru") })
-    assertTrue(templateNames.any { it.contains("Danbooru") })
-    assertTrue(templateNames.any { it.contains("Yande.re") })
+    assertTrue(templateNames.contains("Konachan"))
+    assertTrue(templateNames.contains("Xbooru"))
     assertTrue(templateNames.any { it.contains("Gelbooru") })
-    assertTrue(templateNames.any { it.contains("Moebooru") })
-    assertTrue(templateNames.any { it.contains("Waifu") })
+    assertTrue(templateNames.contains("Rule34.xxx"))
+  }
+
+  @Test
+  fun testBuiltInSourcesDoNotAppearAsDuplicateTemplates() {
+    val templates = MediaSourceConfig.SOURCE_TEMPLATES
+    val templateNames = templates.map { it.name.lowercase() }
+    val templateApiUrls = templates.map { it.apiUrl.lowercase() }
+
+    // Ensure none of the 4 built-in sources appear as templates
+    for (builtin in MediaSourceConfig.DEFAULT_SOURCES) {
+      assertFalse(
+        "Built-in source ${builtin.name} must not be present in templates list",
+        templateNames.any { it == builtin.name.lowercase() }
+      )
+    }
+    assertFalse(templateApiUrls.any { it.contains("safebooru.org") })
+    assertFalse(templateApiUrls.any { it.contains("danbooru.donmai.us") })
+    assertFalse(templateApiUrls.any { it.contains("yande.re") })
+    assertFalse(templateApiUrls.any { it.contains("waifu.im") })
+  }
+
+  @Test
+  fun testExpectedFourAdditionalTemplatesArePresent() {
+    val templates = MediaSourceConfig.SOURCE_TEMPLATES
+    assertEquals(4, templates.size)
+
+    val names = templates.map { it.name }
+    assertTrue("Konachan should be present", names.contains("Konachan"))
+    assertTrue("Xbooru should be present", names.contains("Xbooru"))
+    assertTrue("Gelbooru should be present", names.any { it.contains("Gelbooru") })
+    assertTrue("Rule34.xxx should be present", names.contains("Rule34.xxx"))
+
+    // Verify unwanted sources are not present
+    assertFalse(names.any { it.contains("e621", ignoreCase = true) })
+    assertFalse(names.any { it.contains("Furbooru", ignoreCase = true) })
+    assertFalse(names.any { it.contains("HypnoHub", ignoreCase = true) })
+    assertFalse(names.any { it.contains("Realbooru", ignoreCase = true) })
+  }
+
+  @Test
+  fun testKonachanConfigurationAndResponseParsing() {
+    val konachan = MediaSourceConfig.TEMPLATE_KONACHAN
+    assertEquals("Konachan", konachan.name)
+    assertEquals("https://konachan.net/post.json", konachan.apiUrl)
+    assertEquals("page", konachan.pageParam)
+    assertEquals(1, konachan.pageStartsAt)
+    assertEquals("tags", konachan.searchParam)
+
+    val samplePayload = """
+      [
+        {
+          "id": 409603,
+          "tags": "animal cat clouds scenic",
+          "file_url": "https://konachan.net/image/f54bd/art.jpg",
+          "preview_url": "https://konachan.net/data/preview/f5/4b/thumb.jpg",
+          "sample_url": "https://konachan.net/sample/f54bd/sample.jpg",
+          "rating": "s",
+          "author": "BattlequeenYume",
+          "file_ext": "jpg"
+        }
+      ]
+    """.trimIndent()
+
+    val apiClient = MediaApiClient()
+    val items = apiClient.parseMediaItems(konachan, samplePayload)
+    assertEquals(1, items.size)
+    val item = items[0]
+    assertEquals("409603", item.id)
+    assertEquals("https://konachan.net/image/f54bd/art.jpg", item.imageUrl)
+    assertEquals("https://konachan.net/data/preview/f5/4b/thumb.jpg", item.thumbnailUrl)
+    assertEquals("https://konachan.net/sample/f54bd/sample.jpg", item.sampleUrl)
+    assertEquals("https://konachan.net/post/show/409603", item.postUrl)
+    assertEquals(MediaRating.SAFE, item.rating)
+    assertEquals("BattlequeenYume", item.author)
+  }
+
+  @Test
+  fun testXbooruConfigurationAndResponseParsing() {
+    val xbooru = MediaSourceConfig.TEMPLATE_XBOORU
+    assertEquals("Xbooru", xbooru.name)
+    assertEquals("https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1", xbooru.apiUrl)
+    assertEquals("pid", xbooru.pageParam)
+    assertEquals(0, xbooru.pageStartsAt)
+    assertEquals("limit", xbooru.pageSizeParam)
+    assertEquals("tags", xbooru.searchParam)
+
+    val samplePayload = """
+      [
+        {
+          "id": 1285660,
+          "directory": 253,
+          "image": "art.jpeg",
+          "file_url": "https://img.xbooru.com/images/253/art.jpeg",
+          "preview_url": "https://xbooru.com/thumbnails/253/thumbnail_art.jpg",
+          "sample_url": "https://xbooru.com/samples/253/sample_art.jpg",
+          "rating": "explicit",
+          "tags": "anime illustration",
+          "owner": "artist_one"
+        }
+      ]
+    """.trimIndent()
+
+    val apiClient = MediaApiClient()
+    val items = apiClient.parseMediaItems(xbooru, samplePayload)
+    assertEquals(1, items.size)
+    val item = items[0]
+    assertEquals("1285660", item.id)
+    assertEquals("https://img.xbooru.com/images/253/art.jpeg", item.imageUrl)
+    assertEquals("https://xbooru.com/thumbnails/253/thumbnail_art.jpg", item.thumbnailUrl)
+    assertEquals("https://xbooru.com/samples/253/sample_art.jpg", item.sampleUrl)
+    assertEquals("https://xbooru.com/index.php?page=post&s=view&id=1285660", item.postUrl)
+    assertEquals(MediaRating.ADULT, item.rating)
+    assertEquals("artist_one", item.author)
+  }
+
+  @Test
+  fun testGelbooruAndRule34AuthenticationParameters() {
+    // Gelbooru
+    val gelbooru = MediaSourceConfig.TEMPLATE_GELBOORU
+    assertTrue(gelbooru.description.contains("api_key", ignoreCase = true))
+    assertTrue(gelbooru.description.contains("user_id", ignoreCase = true))
+    assertEquals(com.example.model.AuthType.QUERY_PARAMS, gelbooru.authType)
+    val gelbooruParamKeys = gelbooru.authQueryParams.map { it.key }
+    assertTrue(gelbooruParamKeys.contains("api_key"))
+    assertTrue(gelbooruParamKeys.contains("user_id"))
+
+    // Rule34.xxx
+    val rule34 = MediaSourceConfig.TEMPLATE_RULE34
+    assertEquals("https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1", rule34.apiUrl)
+    assertEquals("pid", rule34.pageParam)
+    assertEquals(0, rule34.pageStartsAt)
+    assertEquals(com.example.model.AuthType.QUERY_PARAMS, rule34.authType)
+    val rule34ParamKeys = rule34.authQueryParams.map { it.key }
+    assertTrue(rule34ParamKeys.contains("user_id"))
+    assertTrue(rule34ParamKeys.contains("api_key"))
+    assertTrue(rule34.description.contains("user_id", ignoreCase = true))
+    assertTrue(rule34.description.contains("api_key", ignoreCase = true))
+
+    // Verify query parameters construction in request
+    val configuredRule34 = rule34.copy(
+      authQueryParams = listOf(
+        com.example.model.AuthParam("user_id", "12345"),
+        com.example.model.AuthParam("api_key", "secretkey999")
+      )
+    )
+    val request = com.example.data.MediaRequestBuilder.buildFetchRequest(configuredRule34, query = "scenery", page = 1)
+    val url = request.url.toString()
+    assertTrue(url.contains("user_id=12345"))
+    assertTrue(url.contains("api_key=secretkey999"))
+    assertTrue(url.contains("tags=scenery"))
+    assertTrue(url.contains("pid=0"))
+
+    // Verify postUrl for Rule34
+    val samplePayload = """[{"id": 99999, "file_url": "https://api-cdn.rule34.xxx/images/1/art.jpg", "tags": "art"}]"""
+    val apiClient = MediaApiClient()
+    val items = apiClient.parseMediaItems(rule34, samplePayload)
+    assertEquals(1, items.size)
+    assertEquals("https://rule34.xxx/index.php?page=post&s=view&id=99999", items[0].postUrl)
+  }
+
+  @Test
+  fun testAuthenticationErrorsInHttp200DiagnosedCorrectly() {
+    val rule34Error = "\"Missing authentication. Go to api.rule34.xxx for more information\""
+    val detectedError = com.example.data.SourceDiagnosticRunner.detectAuthError(rule34Error)
+    assertEquals("Missing authentication. Go to api.rule34.xxx for more information", detectedError)
+
+    val jsonError = """{"error": "Invalid API key provided", "success": false}"""
+    val detectedJsonError = com.example.data.SourceDiagnosticRunner.detectAuthError(jsonError)
+    assertEquals("Invalid API key provided", detectedJsonError)
+
+    val sensitiveSource = MediaSourceConfig.TEMPLATE_RULE34.copy(
+      apiKey = "SECRET_API_KEY_ABCD",
+      authQueryParams = listOf(
+        com.example.model.AuthParam("user_id", "MY_USER_9999"),
+        com.example.model.AuthParam("api_key", "SECRET_API_KEY_ABCD")
+      )
+    )
+
+    val serverLeakedMessage = "Failed: Invalid key SECRET_API_KEY_ABCD for user MY_USER_9999"
+    val sanitized = com.example.data.SourceDiagnosticRunner.sanitizeDiagnosticMessage(serverLeakedMessage, sensitiveSource)
+    assertFalse(sanitized.contains("SECRET_API_KEY_ABCD"))
+    assertFalse(sanitized.contains("MY_USER_9999"))
+    assertTrue(sanitized.contains("[REDACTED]"))
   }
 
   // --- 20. Source Diagnostics Logic Tests (Batch 6) ---

@@ -60,7 +60,7 @@ fun EntryChoiceScreen(
             title = "Templates",
             badge = "QUICKEST",
             badgeColor = EmeraldSafe,
-            description = "Choose from ready-to-use booru & imageboard templates including Safebooru, Danbooru, Yande.re, Gelbooru, and Moebooru.",
+            description = "Choose from ready-to-use booru & imageboard templates including Konachan, Xbooru, Gelbooru, and Rule34.xxx.",
             icon = Icons.Default.ViewList,
             iconTint = MaterialTheme.colorScheme.primary,
             testTag = "choice_templates",

@@ -37,6 +37,14 @@ class MediaApiClient {
                     return@withContext Result.success(emptyList())
                 }
 
+                val authError = SourceDiagnosticRunner.detectAuthError(bodyString)
+                if (authError != null) {
+                    val sanitized = SourceDiagnosticRunner.sanitizeDiagnosticMessage(authError, source)
+                    return@withContext Result.failure(
+                        Exception("Authentication failed: $sanitized")
+                    )
+                }
+
                 val items = MediaResponseParser.parseMediaItems(source, bodyString)
                 Result.success(items)
             }

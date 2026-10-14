@@ -65,6 +65,9 @@ object MediaResponseParser {
             source.apiUrl.contains("danbooru") -> "https://danbooru.donmai.us/posts/$id"
             source.apiUrl.contains("yande.re") -> "https://yande.re/post/show/$id"
             source.apiUrl.contains("gelbooru.com") -> "https://gelbooru.com/index.php?page=post&s=view&id=$id"
+            source.apiUrl.contains("konachan") -> if (source.apiUrl.contains("konachan.com")) "https://konachan.com/post/show/$id" else "https://konachan.net/post/show/$id"
+            source.apiUrl.contains("xbooru.com") -> "https://xbooru.com/index.php?page=post&s=view&id=$id"
+            source.apiUrl.contains("rule34.xxx") -> "https://rule34.xxx/index.php?page=post&s=view&id=$id"
             source.postUrlField.isNotBlank() -> {
                 val rawPost = JsonPathExtractor.extractValue(obj, source.postUrlField)
                 if (rawPost.isNotBlank() && (rawPost.contains("://") || rawPost.startsWith("//") || rawPost.startsWith("/"))) {

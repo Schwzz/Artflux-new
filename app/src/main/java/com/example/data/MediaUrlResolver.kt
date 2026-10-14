@@ -115,6 +115,73 @@ object MediaUrlResolver {
             }
         }
 
+        // Xbooru handling
+        if (source.apiUrl.contains("xbooru.com")) {
+            val directory = obj.optString("directory")
+            val image = obj.optString("image")
+            val rawFileUrl = rawImage.ifBlank { obj.optString("file_url") }
+            val rawThumbUrl = rawThumb.ifBlank { obj.optString("preview_url") }
+            val rawSampleUrl = rawSample.ifBlank { obj.optString("sample_url") }
+
+            val full = when {
+                rawFileUrl.isNotBlank() -> fixUrl(rawFileUrl)
+                directory.isNotBlank() && image.isNotBlank() -> "https://img.xbooru.com/images/$directory/$image"
+                else -> ""
+            }
+
+            val thumb = when {
+                rawThumbUrl.isNotBlank() && !MediaClassifier.isVideoUrl(rawThumbUrl) -> fixUrl(rawThumbUrl)
+                directory.isNotBlank() && image.isNotBlank() -> {
+                    val baseName = image.substringBeforeLast('.')
+                    "https://xbooru.com/thumbnails/$directory/thumbnail_$baseName.jpg"
+                }
+                !MediaClassifier.isVideoUrl(full) -> full
+                else -> ""
+            }
+
+            val hasSample = obj.optBoolean("sample", false) || obj.optInt("sample", 0) == 1
+            val sample = when {
+                rawSampleUrl.isNotBlank() -> fixUrl(rawSampleUrl)
+                hasSample && directory.isNotBlank() && image.isNotBlank() -> "https://xbooru.com/samples/$directory/sample_$image"
+                else -> null
+            }
+
+            if (full.isNotBlank()) {
+                return Triple(full, thumb, sample)
+            }
+        }
+
+        // Rule34.xxx handling
+        if (source.apiUrl.contains("rule34.xxx")) {
+            val directory = obj.optString("directory")
+            val image = obj.optString("image")
+            val rawFileUrl = rawImage.ifBlank { obj.optString("file_url") }
+            val rawThumbUrl = rawThumb.ifBlank { obj.optString("preview_url") }
+            val rawSampleUrl = rawSample.ifBlank { obj.optString("sample_url") }
+
+            val full = when {
+                rawFileUrl.isNotBlank() -> fixUrl(rawFileUrl)
+                directory.isNotBlank() && image.isNotBlank() -> "https://api-cdn.rule34.xxx/images/$directory/$image"
+                else -> ""
+            }
+
+            val thumb = when {
+                rawThumbUrl.isNotBlank() && !MediaClassifier.isVideoUrl(rawThumbUrl) -> fixUrl(rawThumbUrl)
+                directory.isNotBlank() && image.isNotBlank() -> "https://api-cdn.rule34.xxx/thumbnails/$directory/thumbnail_$image"
+                !MediaClassifier.isVideoUrl(full) -> full
+                else -> ""
+            }
+
+            val sample = when {
+                rawSampleUrl.isNotBlank() -> fixUrl(rawSampleUrl)
+                else -> null
+            }
+
+            if (full.isNotBlank()) {
+                return Triple(full, thumb, sample)
+            }
+        }
+
         // Generic URL resolution consistently respecting configured fields
         val full = fixUrl(rawImage)
         val sample = if (rawSample.isNotBlank()) fixUrl(rawSample) else null

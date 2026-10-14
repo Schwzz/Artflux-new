@@ -626,99 +626,55 @@ RULES:
 
         // --- EXPANDED SOURCE TEMPLATES ---
 
-        val TEMPLATE_WAIFU_IM = MediaSourceConfig(
-            name = "Waifu.im API",
-            apiUrl = "https://api.waifu.im/images",
-            searchParam = "IncludedTags",
+        val TEMPLATE_KONACHAN = MediaSourceConfig(
+            name = "Konachan",
+            apiUrl = "https://konachan.net/post.json",
+            searchParam = "tags",
             pageParam = "page",
             pageStartsAt = 1,
-            pageSizeParam = "pageSize",
+            pageSizeParam = "limit",
             defaultPageSize = 25,
-            itemsPath = "items",
-            imageUrlField = "url",
-            thumbUrlField = "url",
-            sampleUrlField = "url",
-            postUrlField = "source",
+            itemsPath = "",
+            imageUrlField = "file_url",
+            thumbUrlField = "preview_url",
+            sampleUrlField = "sample_url",
+            postUrlField = "id",
             tagsField = "tags",
-            ratingField = "isNsfw",
-            mediaTypeField = "extension",
-            gifQueryTag = "",
+            ratingField = "rating",
+            mediaTypeField = "file_ext",
+            authorField = "author",
+            gifQueryTag = "animated",
             videoQueryTag = "",
-            safeRatingTag = "is_nsfw:false",
-            suggestiveRatingTag = "",
-            adultRatingTag = "is_nsfw:true",
-            description = "Curated anime illustration API with v7 endpoint supporting SFW/NSFW filtering and tag search."
+            safeRatingTag = "rating:s",
+            suggestiveRatingTag = "rating:q",
+            adultRatingTag = "rating:e",
+            description = "Anime wallpaper imageboard based on the Moebooru engine."
         )
 
-        val TEMPLATE_SAFEBOORU = MediaSourceConfig(
-            name = "Safebooru XML/JSON API",
-            apiUrl = "https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1",
+        val TEMPLATE_MOEBOORU = TEMPLATE_KONACHAN
+
+        val TEMPLATE_XBOORU = MediaSourceConfig(
+            name = "Xbooru",
+            apiUrl = "https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1",
             searchParam = "tags",
             pageParam = "pid",
             pageStartsAt = 0,
             pageSizeParam = "limit",
             defaultPageSize = 25,
             itemsPath = "",
-            imageUrlField = "sample_url",
+            imageUrlField = "file_url",
             thumbUrlField = "preview_url",
             sampleUrlField = "sample_url",
             postUrlField = "id",
             tagsField = "tags",
             ratingField = "rating",
+            mediaTypeField = "file_ext",
             gifQueryTag = "animated",
             videoQueryTag = "",
-            safeRatingTag = "rating:general",
+            safeRatingTag = "",
             suggestiveRatingTag = "",
             adultRatingTag = "",
-            description = "Public anime illustration archive with tag-based search."
-        )
-
-        val TEMPLATE_DANBOORU = MediaSourceConfig(
-            name = "Danbooru REST API",
-            apiUrl = "https://danbooru.donmai.us/posts.json",
-            searchParam = "tags",
-            pageParam = "page",
-            pageStartsAt = 1,
-            pageSizeParam = "limit",
-            defaultPageSize = 25,
-            itemsPath = "",
-            imageUrlField = "file_url",
-            thumbUrlField = "preview_file_url",
-            sampleUrlField = "large_file_url",
-            postUrlField = "id",
-            tagsField = "tag_string",
-            ratingField = "rating",
-            mediaTypeField = "file_ext",
-            gifQueryTag = "animated_gif",
-            videoQueryTag = "webm",
-            safeRatingTag = "rating:g",
-            suggestiveRatingTag = "rating:s,q",
-            adultRatingTag = "rating:e",
-            description = "Standard Danbooru JSON endpoint with full metadata and ratings."
-        )
-
-        val TEMPLATE_YANDERE = MediaSourceConfig(
-            name = "Yande.re Scans API",
-            apiUrl = "https://yande.re/post.json",
-            searchParam = "tags",
-            pageParam = "page",
-            pageStartsAt = 1,
-            pageSizeParam = "limit",
-            defaultPageSize = 25,
-            itemsPath = "",
-            imageUrlField = "file_url",
-            thumbUrlField = "preview_url",
-            sampleUrlField = "sample_url",
-            postUrlField = "id",
-            tagsField = "tags",
-            ratingField = "rating",
-            mediaTypeField = "file_ext",
-            gifQueryTag = "",
-            videoQueryTag = "",
-            safeRatingTag = "rating:s",
-            suggestiveRatingTag = "rating:q",
-            adultRatingTag = "rating:e",
-            description = "High-quality anime illustration scans and artwork repository."
+            description = "Imageboard running on Gelbooru/DAPI engine with tag-based search."
         )
 
         val TEMPLATE_GELBOORU = MediaSourceConfig(
@@ -747,15 +703,15 @@ RULES:
                 AuthParam("api_key", ""),
                 AuthParam("user_id", "")
             ),
-            description = "Gelbooru imageboard with optional api_key & user_id query parameters."
+            description = "Gelbooru imageboard API. Requires an api_key and user_id (found in Account Options) passed as query parameters."
         )
 
-        val TEMPLATE_MOEBOORU = MediaSourceConfig(
-            name = "Moebooru (Konachan)",
-            apiUrl = "https://konachan.net/post.json",
+        val TEMPLATE_RULE34 = MediaSourceConfig(
+            name = "Rule34.xxx",
+            apiUrl = "https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1",
             searchParam = "tags",
-            pageParam = "page",
-            pageStartsAt = 1,
+            pageParam = "pid",
+            pageStartsAt = 0,
             pageSizeParam = "limit",
             defaultPageSize = 25,
             itemsPath = "",
@@ -767,20 +723,29 @@ RULES:
             ratingField = "rating",
             mediaTypeField = "file_ext",
             gifQueryTag = "animated",
-            videoQueryTag = "",
-            safeRatingTag = "rating:s",
-            suggestiveRatingTag = "rating:q",
-            adultRatingTag = "rating:e",
-            description = "Moebooru engine endpoint for anime wallpapers and illustrations."
+            videoQueryTag = "video",
+            safeRatingTag = "",
+            suggestiveRatingTag = "",
+            adultRatingTag = "",
+            authType = AuthType.QUERY_PARAMS,
+            authQueryParams = listOf(
+                AuthParam("user_id", ""),
+                AuthParam("api_key", "")
+            ),
+            description = "Rule34 imageboard API. Requires user_id and api_key query parameters from your account settings."
         )
 
+        // Legacy definitions kept for backward compatibility with existing tests
+        val TEMPLATE_WAIFU_IM = BUILT_IN_WAIFU_IM
+        val TEMPLATE_SAFEBOORU = BUILT_IN_SAFEBOORU
+        val TEMPLATE_DANBOORU = BUILT_IN_DANBOORU
+        val TEMPLATE_YANDERE = BUILT_IN_YANDERE
+
         val SOURCE_TEMPLATES = listOf(
-            TEMPLATE_SAFEBOORU,
-            TEMPLATE_DANBOORU,
-            TEMPLATE_YANDERE,
+            TEMPLATE_KONACHAN,
+            TEMPLATE_XBOORU,
             TEMPLATE_GELBOORU,
-            TEMPLATE_MOEBOORU,
-            TEMPLATE_WAIFU_IM
+            TEMPLATE_RULE34
         )
     }
 }

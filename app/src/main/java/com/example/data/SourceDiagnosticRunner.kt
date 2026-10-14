@@ -96,18 +96,31 @@ class SourceDiagnosticRunner(private val client: OkHttpClient) {
         }
 
         // 2. Authentication Step
-        if (httpCode == 401 || httpCode == 403) {
+        val authErrorInBody = detectAuthError(bodyString)
+        if (httpCode == 401 || httpCode == 403 || authErrorInBody != null) {
+            val rawReason = when {
+                authErrorInBody != null -> authErrorInBody
+                httpCode == 401 || httpCode == 403 -> "HTTP $httpCode Unauthorized/Forbidden. Check API key, user ID, or header credentials."
+                else -> "Authentication failed."
+            }
+            val sanitizedReason = sanitizeDiagnosticMessage(rawReason, source)
+            val actionableDetail = if (authErrorInBody != null) {
+                "Authentication failed: $sanitizedReason. Please check that your API credentials (e.g. api_key, user_id) are valid and properly configured."
+            } else {
+                sanitizedReason
+            }
+
             steps.add(
                 DiagnosticStep(
                     "Authentication",
                     DiagnosticStatus.FAILED,
-                    "HTTP $httpCode Unauthorized/Forbidden. Check API key, user ID, or header credentials."
+                    actionableDetail
                 )
             )
             return@withContext SourceDiagnosticReport(
                 isSuccess = false,
                 httpStatus = httpCode,
-                summary = "Authentication failed (HTTP $httpCode).",
+                summary = "Authentication failed: $sanitizedReason",
                 steps = steps
             )
         } else {
@@ -291,4 +304,100 @@ class SourceDiagnosticRunner(private val client: OkHttpClient) {
         val message: String,
         val bodyString: String
     )
+
+    companion object {
+        fun detectAuthError(body: String): String? {
+            val trimmed = body.trim()
+            if (trimmed.isEmpty()) return null
+
+            // Known authentication failure indicators (case-insensitive)
+            val authKeywords = listOf(
+                "missing authentication",
+                "invalid authentication",
+                "authentication failed",
+                "authentication required",
+                "requires authentication",
+                "invalid api_key",
+                "invalid api key",
+                "api_key required",
+                "api key required",
+                "invalid user_id",
+                "invalid user id",
+                "user_id required",
+                "user id required",
+                "unauthorized",
+                "access denied",
+                "login required",
+                "invalid credentials"
+            )
+
+            // 1. If it's a JSON object: {"error": "...", "message": "..."}
+            if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                try {
+                    val json = JSONObject(trimmed)
+                    val errorKeys = listOf("error", "message", "msg", "reason", "detail", "description")
+                    for (key in errorKeys) {
+                        val value = json.optString(key, "").trim()
+                        if (value.isNotEmpty()) {
+                            val valueLower = value.lowercase()
+                            if (authKeywords.any { valueLower.contains(it) } ||
+                                valueLower.contains("auth") ||
+                                valueLower.contains("unauthorized") ||
+                                valueLower.contains("forbidden")
+                            ) {
+                                return value
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Not a valid JSONObject, fall through
+                }
+            }
+
+            // 2. Check for JSON-quoted string: e.g. "Missing authentication. Go to api.rule34.xxx for more information"
+            val unquoted = if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length >= 2) {
+                trimmed.substring(1, trimmed.length - 1).trim()
+            } else {
+                trimmed
+            }
+
+            // 3. If unquoted plain text matches any keyword
+            val unquotedLower = unquoted.lowercase()
+            if (authKeywords.any { unquotedLower.contains(it) }) {
+                if (unquoted.length < 500 && !unquoted.startsWith("<html", ignoreCase = true) && !unquoted.startsWith("<!doctype", ignoreCase = true)) {
+                    return unquoted
+                }
+                val matchedLine = unquoted.lines().firstOrNull { line ->
+                    authKeywords.any { line.lowercase().contains(it) }
+                }?.trim()
+                if (!matchedLine.isNullOrBlank()) {
+                    return matchedLine.take(200)
+                }
+                return "Authentication required by server"
+            }
+
+            return null
+        }
+
+        fun sanitizeDiagnosticMessage(message: String, source: MediaSourceConfig): String {
+            var sanitized = message
+            val sensitiveValues = mutableListOf<String>()
+            if (source.apiKey.isNotBlank() && source.apiKey.length > 2) {
+                sensitiveValues.add(source.apiKey)
+            }
+            if (source.authHeaderValue.isNotBlank() && source.authHeaderValue.length > 2) {
+                sensitiveValues.add(source.authHeaderValue)
+            }
+            for (param in source.authQueryParams) {
+                if (param.value.isNotBlank() && param.value.length > 2) {
+                    sensitiveValues.add(param.value)
+                }
+            }
+
+            for (secret in sensitiveValues.distinct()) {
+                sanitized = sanitized.replace(secret, "[REDACTED]")
+            }
+            return sanitized
+        }
+    }
 }
