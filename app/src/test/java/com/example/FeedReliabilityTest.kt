@@ -187,7 +187,7 @@ class FeedReliabilityTest {
         vm.openSourceDiagnostics(MediaSourceConfig.BUILT_IN_SAFEBOORU)
         runCurrent()
         vm.dismissSourceDiagnostics()
-        fetcher.diagnostics.last().complete(SourceDiagnosticReport(true, "Late", emptyList()))
+        fetcher.diagnostics.last().complete(SourceDiagnosticReport(isSuccess = true, summary = "Late"))
         runCurrent()
         assertNull(vm.diagnosticReport.value)
         assertNull(vm.diagnosticSource.value)
