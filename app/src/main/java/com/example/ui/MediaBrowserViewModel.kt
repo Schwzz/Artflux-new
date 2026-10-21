@@ -941,10 +941,10 @@ class MediaBrowserViewModel internal constructor(
         else notify("No readable offline copies. Retry the download from Library → Downloads.")
     }
     fun exportBackup(uri: Uri) {
+        val data = ArtfluxBackup(savedItems.value, collections.value, sources.value, browsing.value,
+            colorPalette.value, thumbnailQuality.value, blurNsfw.value, loopVideoPlayback.value)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val data = ArtfluxBackup(savedItems.value, collections.value, sources.value, browsing.value,
-                    colorPalette.value, thumbnailQuality.value, blurNsfw.value, loopVideoPlayback.value)
                 val text = ArtfluxBackupCodec.encode(data)
                 require(text.toByteArray().size <= ArtfluxBackupCodec.MAX_BYTES) { "Backup exceeds 8 MB" }
                 getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) }

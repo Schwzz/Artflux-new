@@ -138,6 +138,19 @@ class BrowsingFeaturesTest {
         assertNotEquals(first, restored.enqueue(item("1"), false))
     }
 
+    @Test fun completedGalleryDownloadsCanBeDownloadedAgain() {
+        val store = ArtworkDownloads(context)
+        val first = store.enqueue(item("again"), false)
+        val prefs = context.getSharedPreferences("artflux_downloads", Context.MODE_PRIVATE)
+        val records = JSONArray(prefs.getString("records", "[]"))
+        records.getJSONObject(0).put("status", android.app.DownloadManager.STATUS_SUCCESSFUL)
+            .put("uri", "content://downloads/all_downloads/$first")
+        prefs.edit().putString("records", records.toString()).commit()
+        val restarted = ArtworkDownloads(context)
+        assertNotEquals(first, restarted.enqueue(item("again"), false))
+        assertEquals(2, restarted.state.value.size)
+    }
+
     @Test fun homeSearchBlockingAndSavedSearchesUseRealViewModelPaths() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val fetcher = object : MediaFetcher {

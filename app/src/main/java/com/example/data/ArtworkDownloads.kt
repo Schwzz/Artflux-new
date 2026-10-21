@@ -52,7 +52,8 @@ class ArtworkDownloads(private val context: Context) {
 
     @Synchronized fun enqueue(item: MediaItem, offline: Boolean, url: String = item.actualMediaUrl, filename: String? = null): Long {
         val valid = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("This artwork has no downloadable HTTP URL")
-        val previous = mutable.value.firstOrNull { it.item.libraryKey == item.libraryKey && it.offline == offline && it.status != DownloadManager.STATUS_FAILED }
+        val previous = mutable.value.firstOrNull { it.item.libraryKey == item.libraryKey && it.offline == offline && it.status != DownloadManager.STATUS_FAILED &&
+            (offline || it.status != DownloadManager.STATUS_SUCCESSFUL) }
         if (previous != null) return previous.downloadId
         val ext = valid.pathSegments.lastOrNull().orEmpty().substringAfterLast('.', "").lowercase().takeIf { it in setOf("jpg","jpeg","png","webp","gif","mp4","webm","mkv","avif") }
             ?: item.fileExt?.takeIf { it.matches(Regex("[a-zA-Z0-9]{2,5}")) } ?: if (item.mediaType == MediaType.VIDEO) "mp4" else "jpg"
