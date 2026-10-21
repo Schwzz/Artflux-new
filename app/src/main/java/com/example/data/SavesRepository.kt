@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 
-class SavesRepository(context: Context) {
+class SavesRepository(context: Context, private val sourceIdsByName: Map<String, String> = emptyMap()) {
     private val prefs = context.getSharedPreferences("artflux_saves_store", Context.MODE_PRIVATE)
 
     private val _savedItemsMap = MutableStateFlow<Map<String, MediaItem>>(emptyMap())
@@ -30,13 +30,16 @@ class SavesRepository(context: Context) {
     private fun loadData() {
         val savedJson = prefs.getString("saved_artworks_json", null)
         val itemsMap = mutableMapOf<String, MediaItem>()
+        val migratedIds = mutableMapOf<String, String>()
         if (!savedJson.isNullOrBlank()) {
             try {
                 val array = JSONArray(savedJson)
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
-                    val item = MediaItem.fromJson(obj)
-                    itemsMap[item.id] = item
+                    val original = MediaItem.fromJson(obj)
+                    val item = original.copy(sourceId = original.sourceId.ifBlank { sourceIdsByName[original.sourceName].orEmpty() })
+                    itemsMap[item.libraryKey] = item
+                    migratedIds[original.id] = item.libraryKey
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -53,7 +56,8 @@ class SavesRepository(context: Context) {
                 val array = JSONArray(colJson)
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
-                    colsList.add(ArtCollection.fromJson(obj))
+                    val collection = ArtCollection.fromJson(obj)
+                    colsList.add(collection.copy(mediaIds = collection.mediaIds.map { migratedIds[it] ?: it }.distinct()))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -89,7 +93,7 @@ class SavesRepository(context: Context) {
 
     fun saveItem(item: MediaItem) {
         val currentMap = _savedItemsMap.value.toMutableMap()
-        currentMap[item.id] = item
+        currentMap[item.libraryKey] = item
         _savedItemsMap.value = currentMap
         persistItems()
     }
@@ -123,8 +127,8 @@ class SavesRepository(context: Context) {
         val collectionIds = lastUnsavedCollections
         if (collectionIds.isNotEmpty()) {
             val updated = _collections.value.map { col ->
-                if (col.id in collectionIds && item.id !in col.mediaIds) {
-                    col.copy(mediaIds = col.mediaIds + item.id)
+                if (col.id in collectionIds && item.libraryKey !in col.mediaIds) {
+                    col.copy(mediaIds = col.mediaIds + item.libraryKey)
                 } else col
             }
             _collections.value = updated
@@ -135,8 +139,8 @@ class SavesRepository(context: Context) {
     }
 
     fun toggleSave(item: MediaItem) {
-        if (isSaved(item.id)) {
-            unsaveItem(item.id)
+        if (isSaved(item.libraryKey)) {
+            unsaveItem(item.libraryKey)
         } else {
             saveItem(item)
         }
@@ -173,14 +177,14 @@ class SavesRepository(context: Context) {
     }
 
     fun addMediaToCollection(collectionId: String, mediaItem: MediaItem) {
-        if (!isSaved(mediaItem.id)) {
+        if (!isSaved(mediaItem.libraryKey)) {
             saveItem(mediaItem)
         }
 
         val updated = _collections.value.map { col ->
             if (col.id == collectionId) {
-                if (mediaItem.id !in col.mediaIds) {
-                    col.copy(mediaIds = col.mediaIds + mediaItem.id)
+                if (mediaItem.libraryKey !in col.mediaIds) {
+                    col.copy(mediaIds = col.mediaIds + mediaItem.libraryKey)
                 } else col
             } else col
         }
@@ -200,11 +204,43 @@ class SavesRepository(context: Context) {
 
     fun toggleMediaInCollection(collectionId: String, mediaItem: MediaItem) {
         val col = _collections.value.firstOrNull { it.id == collectionId } ?: return
-        if (mediaItem.id in col.mediaIds) {
-            removeMediaFromCollection(collectionId, mediaItem.id)
+        if (mediaItem.libraryKey in col.mediaIds) {
+            removeMediaFromCollection(collectionId, mediaItem.libraryKey)
         } else {
             addMediaToCollection(collectionId, mediaItem)
         }
+    }
+
+    fun addItemsToCollection(collectionId: String, items: List<MediaItem>) {
+        if (_collections.value.none { it.id == collectionId }) return
+        _savedItemsMap.value = _savedItemsMap.value + items.associateBy { it.libraryKey }
+        _collections.value = _collections.value.map { if (it.id == collectionId) it.copy(mediaIds = (it.mediaIds + items.map { i -> i.libraryKey }).distinct()) else it }
+        persistAll()
+    }
+
+    fun removeItems(keys: Set<String>) {
+        _savedItemsMap.value = _savedItemsMap.value - keys
+        _collections.value = _collections.value.map { it.copy(mediaIds = it.mediaIds.filterNot(keys::contains)) }
+        persistAll()
+    }
+
+    fun merge(items: List<MediaItem>, collections: List<ArtCollection>) {
+        _savedItemsMap.value = _savedItemsMap.value + items.associateBy { it.libraryKey }
+        val existing = _collections.value.associateBy { it.id }.toMutableMap()
+        for (col in collections) {
+            val previous = existing[col.id]
+            existing[col.id] = col.copy(mediaIds = (previous?.mediaIds.orEmpty() + col.mediaIds).distinct().filter { it in _savedItemsMap.value })
+        }
+        _collections.value = existing.values.toList()
+        persistAll()
+    }
+
+    private fun persistAll() {
+        val items = JSONArray().apply { _savedItemsMap.value.values.forEach { put(it.toJson()) } }
+        val cols = JSONArray().apply { _collections.value.forEach { put(it.toJson()) } }
+        prefs.edit().putString("saved_artworks_json", items.toString()).putString("art_collections_json", cols.toString()).apply()
+        _savedItems.value = _savedItemsMap.value.values.toList().reversed()
+        _savedIds.value = _savedItemsMap.value.keys.toSet()
     }
 
     fun getCollectionsForMedia(mediaId: String): List<ArtCollection> {

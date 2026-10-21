@@ -2,7 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,7 +23,7 @@ fun ArtfluxBottomBar(
 ) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp
+        tonalElevation = 0.dp
     ) {
         NavigationBarItem(
             selected = currentTab == MainTab.HOME,
@@ -40,10 +40,10 @@ fun ArtfluxBottomBar(
             modifier = Modifier.testTag("nav_tab_home")
         )
         NavigationBarItem(
-            selected = currentTab == MainTab.SEARCH,
-            onClick = { onTabSelected(MainTab.SEARCH) },
-            icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-            label = { Text("Search") },
+            selected = currentTab == MainTab.LIBRARY,
+            onClick = { onTabSelected(MainTab.LIBRARY) },
+            icon = { Icon(Icons.Default.CollectionsBookmark, contentDescription = "Library") },
+            label = { Text("Library") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = MaterialTheme.colorScheme.onSurface,
                 selectedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -51,7 +51,7 @@ fun ArtfluxBottomBar(
                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier.testTag("nav_tab_search")
+            modifier = Modifier.testTag("nav_tab_library")
         )
         NavigationBarItem(
             selected = currentTab == MainTab.SETTINGS,

@@ -86,6 +86,9 @@ class SourceRepository internal constructor(
         return saveCustomSourcesInternal(currentCustom)
     }
 
+    fun mergeSources(sources: List<MediaSourceConfig>): Boolean =
+        saveCustomSourcesInternal((_sources.value.filterNot { it.isBuiltIn } + sources).distinctBy { it.id })
+
     fun updateSource(source: MediaSourceConfig): Boolean = addSource(source)
 
     fun deleteSource(sourceId: String): Boolean {

@@ -2,9 +2,9 @@ name: Android CI & Build
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, codex/artflux-reliability ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, codex/artflux-reliability ]
   workflow_dispatch:
 
 permissions:
@@ -61,6 +61,7 @@ jobs:
         with:
           name: artflux-verification-reports
           path: |
+            app/build/reports/ui/
             app/build/reports/tests/
             app/build/test-results/
             app/build/reports/lint-results-debug.*

@@ -51,7 +51,7 @@ object MediaResponseParser {
 
         val id = JsonPathExtractor.extractValue(obj, "id").ifBlank {
             JsonPathExtractor.extractValue(obj, "image_id").ifBlank {
-                JsonPathExtractor.extractValue(obj, "signature").ifBlank { "item-${source.id}-$index" }
+                JsonPathExtractor.extractValue(obj, "signature").ifBlank { java.security.MessageDigest.getInstance("SHA-256").digest(finalImage.toByteArray()).joinToString("") { "%02x".format(it) }.take(24) }
             }
         }
         val title = JsonPathExtractor.extractValue(obj, source.titleField).ifBlank {
@@ -174,6 +174,7 @@ object MediaResponseParser {
             height = height,
             author = author,
             sourceName = source.name,
+            sourceId = source.id,
             description = obj.optString("alt_text", obj.optString("description", "")).ifBlank { null },
             fileSize = fileSize,
             fileExt = resolvedFileExt,
