@@ -211,7 +211,7 @@ class MediaBrowserViewModel internal constructor(
 
     fun toggleSave(item: MediaItem) {
         val wasSaved = isSaved(item.libraryKey)
-        savesRepository.toggleSave(item)
+        savesRepository.toggleSave(canonicalItem(item))
         _snackbarMessage.value = if (wasSaved) "Removed from Saved" else "Saved to Library!"
     }
 
@@ -242,7 +242,7 @@ class MediaBrowserViewModel internal constructor(
     }
 
     fun openAddToCollectionDialog(item: MediaItem) {
-        _addToCollectionItem.value = item
+        _addToCollectionItem.value = canonicalItem(item)
     }
 
     fun closeAddToCollectionDialog() {
@@ -797,7 +797,7 @@ class MediaBrowserViewModel internal constructor(
     // ==========================================
 
     fun promptDownload(item: MediaItem) {
-        _downloadTargetItem.value = item
+        _downloadTargetItem.value = canonicalItem(item)
     }
 
     fun dismissDownloadPrompt() {
@@ -859,6 +859,10 @@ class MediaBrowserViewModel internal constructor(
     fun dismissSnackbar() {
         _snackbarMessage.value = null
     }
+
+    private fun canonicalItem(item: MediaItem): MediaItem =
+        savedItems.value.firstOrNull { it.libraryKey == item.libraryKey && it.actualMediaUrl.startsWith("http") }
+            ?: downloads.value.firstOrNull { it.item.libraryKey == item.libraryKey }?.item ?: item
 
     fun notify(message: String) { _snackbarMessage.value = message }
 

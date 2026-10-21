@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <exclude domain="sharedpref" path="artflux_secure_credentials.xml" />
+    <exclude domain="sharedpref" path="artflux_downloads.xml" />
+    <exclude domain="external" path="Download/" />
 </full-backup-content>
