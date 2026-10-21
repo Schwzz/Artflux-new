@@ -100,7 +100,7 @@ fun MediaBrowserScreen(viewModel: MediaBrowserViewModel, modifier: Modifier = Mo
                     onOpen = viewModel::openLibraryItems, onCreate = viewModel::createCollection, onRename = viewModel::renameCollection,
                     onDelete = viewModel::deleteCollection, onAdd = viewModel::bulkAddToCollection, onRemove = viewModel::bulkRemove,
                     onDownload = { items, offline -> if (offline) viewModel.queueDownloads(items, true) else publicDownload { viewModel.queueDownloads(items, false) } },
-                    onRetry = { record -> if (record.offline) viewModel.retryDownload(record) else publicDownload { viewModel.retryDownload(record) } }, onRemoveDownload = viewModel::removeDownload)
+                    onRetry = { record -> if (record.offline) viewModel.retryDownload(record) else publicDownload { viewModel.retryDownload(record) } }, onRemoveDownload = viewModel::removeDownload, onRemoveFromCollection = viewModel::bulkRemoveFromCollection)
                 MainTab.SETTINGS -> SettingsScreen(sources = sources, theme = theme, onThemeChange = viewModel::setTheme,
                     colorPalette = palette, onColorPaletteChange = viewModel::setColorPalette, blurNsfw = blur, onBlurNsfwChange = viewModel::setBlurNsfw,
                     thumbnailQuality = quality, onThumbnailQualityChange = viewModel::setThumbnailQuality,

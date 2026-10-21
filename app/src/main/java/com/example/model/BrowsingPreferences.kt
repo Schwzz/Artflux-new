@@ -30,15 +30,15 @@ data class BrowsingPreferences(
     val activeSourceId: String = MediaSourceConfig.BUILT_IN_SAFEBOORU.id,
     val density: GridDensity = GridDensity.BALANCED
 ) {
-    fun blocks(item: MediaItem): Boolean {
-        val active = blockedTags.filter { it.enabled }.map { normalizeTag(it.tag) }.toSet()
-        return item.tags.any { normalizeTag(it) in active }
+    private val enabledBlockedTags: Set<String> by lazy {
+        blockedTags.asSequence().filter { it.enabled }.map { normalizeTag(it.tag) }.toSet()
     }
+    fun blocks(item: MediaItem): Boolean = enabledBlockedTags.isNotEmpty() && item.tags.any { normalizeTag(it) in enabledBlockedTags }
 
     fun suggestions(query: String): List<String> {
         val token = query.substringAfterLast(' ').trim().lowercase(Locale.ROOT)
         if (token.isBlank() || token.startsWith("-")) return emptyList()
-        val blocked = blockedTags.filter { it.enabled }.map { normalizeTag(it.tag) }.toSet()
+        val blocked = enabledBlockedTags
         return knownTags.asSequence().filter { it.startsWith(token, true) && normalizeTag(it) !in blocked }
             .distinct().sortedBy { it.length }.take(8).toList()
     }

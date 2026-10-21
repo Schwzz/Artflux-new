@@ -27,7 +27,8 @@ fun LibraryHub(
     quality: ThumbnailQuality, blur: Boolean, onOpen: (Int, List<MediaItem>, Boolean) -> Unit,
     onCreate: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
     onAdd: (String, List<MediaItem>) -> Unit, onRemove: (Set<String>) -> Unit,
-    onDownload: (List<MediaItem>, Boolean) -> Unit, onRetry: (ArtworkDownload) -> Unit, onRemoveDownload: (Long) -> Unit
+    onDownload: (List<MediaItem>, Boolean) -> Unit, onRetry: (ArtworkDownload) -> Unit, onRemoveDownload: (Long) -> Unit,
+    onRemoveFromCollection: (String, Set<String>) -> Unit = { _, _ -> }
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -108,6 +109,7 @@ fun LibraryHub(
                     TextButton({ addDialog = true }) { Text("Add to collection") }
                     TextButton({ onDownload(selected, false) }) { Text("Download") }
                     TextButton({ onDownload(selected, true) }) { Text("Save offline") }
+                    if (collection != null) TextButton({ onRemoveFromCollection(collection.id, selected.map { it.libraryKey }.toSet()); selection = emptySet() }) { Text("Remove from collection") }
                     TextButton({ confirmRemove = true }) { Text("Unsave") }
                 } else if (collection != null) TextButton({ onDownload(visible, true) }) { Text("Save collection offline") }
             }
@@ -137,7 +139,7 @@ fun LibraryHub(
     if (confirmDelete && collection != null) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("Delete ${collection.name}?") }, text = { Text("Your saved artwork and offline copies are kept.") },
         confirmButton = { TextButton({ onDelete(collection.id); selectedCollection = null; confirmDelete = false }) { Text("Delete collection") } }, dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } })
     if (confirmRemove) AlertDialog(onDismissRequest = { confirmRemove = false }, title = { Text("Unsave ${selected.size} artworks?") }, text = { Text("They will also be removed from collections. Downloaded files are kept.") },
-        confirmButton = { TextButton({ onRemove(selection); selection = emptySet(); confirmRemove = false }) { Text("Unsave") } }, dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel") } })
+        confirmButton = { TextButton({ onRemove(selected.map { it.libraryKey }.toSet()); selection = emptySet(); confirmRemove = false }) { Text("Unsave") } }, dismissButton = { TextButton({ confirmRemove = false }) { Text("Cancel") } })
     if (addDialog) AlertDialog(onDismissRequest = { addDialog = false }, title = { Text("Add ${selected.size} artworks") },
         text = { Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
             if (collections.isEmpty()) Text("Create a collection first.")

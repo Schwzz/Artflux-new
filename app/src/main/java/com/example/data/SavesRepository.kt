@@ -218,6 +218,11 @@ class SavesRepository(context: Context, private val sourceIdsByName: Map<String,
         persistAll()
     }
 
+    fun removeItemsFromCollection(collectionId: String, keys: Set<String>) {
+        _collections.value = _collections.value.map { if (it.id == collectionId) it.copy(mediaIds = it.mediaIds.filterNot(keys::contains)) else it }
+        persistCollections()
+    }
+
     fun removeItems(keys: Set<String>) {
         _savedItemsMap.value = _savedItemsMap.value - keys
         _collections.value = _collections.value.map { it.copy(mediaIds = it.mediaIds.filterNot(keys::contains)) }

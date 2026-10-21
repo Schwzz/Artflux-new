@@ -74,6 +74,17 @@ class BrowsingFeaturesTest {
         assertEquals(listOf(two), repo.getMediaForCollection(col.id))
     }
 
+    @Test fun removingFromACollectionKeepsSavedArtwork() {
+        val repo = SavesRepository(context)
+        val artwork = item("keep")
+        val collection = repo.createCollection("Only membership")
+        repo.addItemsToCollection(collection.id, listOf(artwork))
+        repo.removeItemsFromCollection(collection.id, setOf(artwork.libraryKey))
+        assertTrue(repo.getMediaForCollection(collection.id).isEmpty())
+        assertTrue(repo.isSaved(artwork.libraryKey))
+        assertEquals(listOf(artwork), SavesRepository(context).savedItems.value)
+    }
+
     @Test fun legacySavedIdsAndCollectionReferencesMigrateTogether() {
         val old = item("42").copy(sourceId = "", sourceName = "Old source")
         val col = ArtCollection("col", "Legacy", mediaIds = listOf("42"))

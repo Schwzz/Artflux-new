@@ -915,6 +915,7 @@ class MediaBrowserViewModel internal constructor(
         syncLegacyHomeState()
     }
     fun bulkAddToCollection(id: String, items: List<MediaItem>) { savesRepository.addItemsToCollection(id, items); notify("Added ${items.size} artworks") }
+    fun bulkRemoveFromCollection(id: String, keys: Set<String>) { savesRepository.removeItemsFromCollection(id, keys); notify("Removed from collection; saved artwork is kept") }
     fun bulkRemove(keys: Set<String>) { savesRepository.removeItems(keys); notify("Removed ${keys.size} saved artworks") }
     fun queueDownloads(items: List<MediaItem>, offline: Boolean, quality: DownloadQuality = DownloadQuality.ORIGINAL, filename: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
