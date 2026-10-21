@@ -8,6 +8,8 @@ import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.MediaApiClient
+import com.example.data.MediaFetcher
+import kotlinx.coroutines.CancellationException
 import com.example.data.PreferencesRepository
 import com.example.data.SourceRepository
 import com.example.model.AppTheme
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 data class FeedState(
     val activeSource: MediaSourceConfig = MediaSourceConfig.BUILT_IN_SAFEBOORU,
     val searchQuery: String = "",
+    val submittedQuery: String = "",
     val filterState: FilterState = FilterState(),
     val rawItems: List<MediaItem> = emptyList(),
     val mediaItems: List<MediaItem> = emptyList(),
@@ -40,15 +43,19 @@ data class FeedState(
     val isLoadingMore: Boolean = false,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
+    val paginationError: String? = null,
     val currentPage: Int = 1,
     val hasReachedEnd: Boolean = false
 )
 
-class MediaBrowserViewModel(application: Application) : AndroidViewModel(application) {
+class MediaBrowserViewModel internal constructor(
+    application: Application,
+    private val apiClient: MediaFetcher
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, MediaApiClient())
     private val repository = SourceRepository(application.applicationContext)
     private val preferencesRepository = PreferencesRepository(application.applicationContext)
     private val savesRepository = com.example.data.SavesRepository(application.applicationContext)
-    private val apiClient = MediaApiClient()
 
     val sources: StateFlow<List<MediaSourceConfig>> = repository.sources
 
@@ -139,6 +146,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
 
     private var homeJob: Job? = null
     private var searchJob: Job? = null
+    private var diagnosticJob: Job? = null
 
     init {
         // Load initial Home discovery feed
@@ -246,7 +254,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
 
     fun setHomeSource(source: MediaSourceConfig) {
         val current = _homeState.value
-        if (current.activeSource.id == source.id) return
+        if (current.activeSource == source) return
 
         val supportedTypes = source.getSupportedMediaTypes()
         val sanitizedFilter = if (current.filterState.mediaType !in supportedTypes) {
@@ -277,13 +285,13 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
         }
 
         val oldEffectiveQuery = QueryBuilder.buildEffectiveQuery(
-            userQuery = current.searchQuery,
+            userQuery = current.submittedQuery,
             source = current.activeSource,
             mediaType = current.filterState.mediaType,
             rating = current.filterState.rating
         )
         val newEffectiveQuery = QueryBuilder.buildEffectiveQuery(
-            userQuery = current.searchQuery,
+            userQuery = current.submittedQuery,
             source = current.activeSource,
             mediaType = sanitizedFilters.mediaType,
             rating = sanitizedFilters.rating
@@ -315,7 +323,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
             filter
         }
 
-        val sourceChanged = current.activeSource.id != source.id
+        val sourceChanged = current.activeSource != source
         val filterChanged = current.filterState != sanitizedFilter
 
         if (!sourceChanged && !filterChanged) return
@@ -340,8 +348,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
             isLoading = false,
             isLoadingMore = false,
             errorMessage = null,
-            currentPage = 1,
-            hasReachedEnd = false
+            paginationError = null
         )
         syncLegacyHomeState()
         loadHomeData(isRefresh = true)
@@ -365,153 +372,95 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
     private fun loadFeedData(isHome: Boolean, isRefresh: Boolean) {
         val stateFlow = if (isHome) _homeState else _searchState
         val current = stateFlow.value
-        if (isRefresh) {
-            if (!current.isRefreshing) {
-                stateFlow.value = current.copy(
-                    currentPage = 1,
-                    hasReachedEnd = false,
-                    isLoading = true,
-                    errorMessage = null
-                )
-            }
-        } else {
-            if (current.isLoading || current.isLoadingMore || current.hasReachedEnd || current.isRefreshing) return
-            stateFlow.value = current.copy(isLoadingMore = true)
-        }
+        if (!isRefresh && (current.isLoading || current.isLoadingMore || current.isRefreshing ||
+                    current.hasReachedEnd || current.paginationError != null)) return
+
+        (if (isHome) homeJob else searchJob)?.cancel()
+        stateFlow.value = current.copy(
+            isLoading = isRefresh && !current.isRefreshing,
+            isLoadingMore = !isRefresh,
+            errorMessage = null,
+            paginationError = null
+        )
         if (isHome) syncLegacyHomeState()
 
-        val activeJob = if (isHome) homeJob else searchJob
-        activeJob?.cancel()
-
+        // Capture the request identity. Draft search edits never change an in-flight request.
+        val source = current.activeSource
+        val query = QueryBuilder.buildEffectiveQuery(
+            current.submittedQuery, source, current.filterState.mediaType, current.filterState.rating
+        )
         val newJob = viewModelScope.launch {
-            var consecutiveDuplicateAttempts = 0
-            val maxDuplicateAttempts = 3
-            var pageToFetch = if (isRefresh) 1 else stateFlow.value.currentPage
-            var success = false
+            var page = if (isRefresh) 1 else current.currentPage
+            var rawItems = if (isRefresh) emptyList() else current.rawItems
+            var randomItems = if (isRefresh) emptyList() else current.mediaItems
 
-            while (isActive && !success && consecutiveDuplicateAttempts < maxDuplicateAttempts) {
-                val stateNow = stateFlow.value
-                val effectiveQuery = QueryBuilder.buildEffectiveQuery(
-                    userQuery = stateNow.searchQuery,
-                    source = stateNow.activeSource,
-                    mediaType = stateNow.filterState.mediaType,
-                    rating = stateNow.filterState.rating
-                )
-
-                val result = apiClient.fetchMedia(stateNow.activeSource, effectiveQuery, pageToFetch)
-
+            // Bound automatic scanning when pages contain only duplicates or filtered-out items.
+            for (attempt in 0 until 3) {
+                val result = apiClient.fetchMedia(source, query, page)
                 if (!isActive) return@launch
-
-                result.onSuccess { newItems ->
-                    if (!isActive) return@launch
-
-                    if (isRefresh) {
-                        val filteredNew = applyClientFilters(newItems, stateNow.filterState)
-                        val updatedMediaItems = if (stateNow.filterState.sort == SortOption.RANDOM) {
-                            filteredNew.shuffled()
-                        } else {
-                            filteredNew
-                        }
-                        val reachedEnd = newItems.isEmpty()
-
-                        stateFlow.value = stateFlow.value.copy(
-                            rawItems = newItems,
-                            mediaItems = updatedMediaItems,
-                            currentPage = 2,
-                            hasReachedEnd = reachedEnd,
-                            isLoading = false,
-                            isLoadingMore = false,
-                            isRefreshing = false,
-                            errorMessage = null
-                        )
-                        if (isHome) syncLegacyHomeState()
-                        success = true
-                    } else {
-                        // Load More
-                        if (newItems.isEmpty()) {
-                            stateFlow.value = stateFlow.value.copy(
-                                hasReachedEnd = true,
-                                isLoadingMore = false,
-                                isLoading = false,
-                                isRefreshing = false
-                            )
-                            if (isHome) syncLegacyHomeState()
-                            success = true
-                        } else {
-                            val existingIds = stateNow.rawItems.map { it.id }.toSet()
-                            val existingUrls = stateNow.rawItems.map { it.actualMediaUrl }.toSet()
-                            val uniqueNewItems = newItems.filter { it.id !in existingIds && it.actualMediaUrl !in existingUrls }
-
-                            if (uniqueNewItems.isEmpty()) {
-                                consecutiveDuplicateAttempts++
-                                pageToFetch++
-                                if (consecutiveDuplicateAttempts >= maxDuplicateAttempts) {
-                                    stateFlow.value = stateFlow.value.copy(
-                                        hasReachedEnd = true,
-                                        isLoadingMore = false,
-                                        isLoading = false,
-                                        isRefreshing = false
-                                    )
-                                    if (isHome) syncLegacyHomeState()
-                                    success = true
-                                }
-                            } else {
-                                val updatedRaw = stateNow.rawItems + uniqueNewItems
-                                val filteredNew = applyClientFilters(uniqueNewItems, stateNow.filterState)
-                                val newBatch = if (stateNow.filterState.sort == SortOption.RANDOM) {
-                                    filteredNew.shuffled()
-                                } else {
-                                    filteredNew
-                                }
-                                val updatedMediaItems = stateNow.mediaItems + newBatch
-
-                                stateFlow.value = stateFlow.value.copy(
-                                    rawItems = updatedRaw,
-                                    mediaItems = updatedMediaItems,
-                                    currentPage = pageToFetch + 1,
-                                    hasReachedEnd = false,
-                                    isLoadingMore = false,
-                                    isLoading = false,
-                                    isRefreshing = false,
-                                    errorMessage = null
-                                )
-                                if (isHome) syncLegacyHomeState()
-                                success = true
-                            }
-                        }
-                    }
-
-                    if (success && !isRefresh) {
-                        val targetType = stateNow.filterState.mediaType
-                        if (targetType != MediaType.ALL && newItems.isNotEmpty() && stateFlow.value.currentPage <= 4) {
-                            val hasMatch = stateFlow.value.mediaItems.any { it.mediaType == targetType }
-                            if (!hasMatch && !stateFlow.value.hasReachedEnd) {
-                                loadFeedData(isHome, isRefresh = false)
-                            }
-                        }
-                    }
-                }.onFailure { error ->
-                    if (!isActive) return@launch
+                val error = result.exceptionOrNull()
+                if (error != null) {
+                    if (error is CancellationException) throw error
+                    val message = error.message ?: "Failed to connect to source."
+                    val keepArtwork = stateFlow.value.mediaItems.isNotEmpty()
                     stateFlow.value = stateFlow.value.copy(
-                        isLoading = false,
-                        isLoadingMore = false,
-                        isRefreshing = false,
-                        errorMessage = if (isRefresh) (error.message ?: "Failed to connect to source.") else null
+                        isLoading = false, isLoadingMore = false, isRefreshing = false,
+                        errorMessage = if (isRefresh && !keepArtwork) message else null,
+                        paginationError = if (!isRefresh) message else null
                     )
-                    if (!isRefresh) {
-                        _snackbarMessage.value = if (isHome) {
-                            "Could not load more items: ${error.message}"
-                        } else {
-                            "Could not load more search items: ${error.message}"
-                        }
-                    }
+                    if (keepArtwork && isRefresh) _snackbarMessage.value = "Refresh failed: $message"
                     if (isHome) syncLegacyHomeState()
-                    success = true
+                    return@launch
                 }
+
+                val fetched = result.getOrThrow()
+                val ids = rawItems.map { it.id }.toMutableSet()
+                val urls = rawItems.map { it.actualMediaUrl }.filter { it.isNotBlank() }.toMutableSet()
+                val uniqueItems = fetched.filter { item ->
+                    if (item.id in ids || (item.actualMediaUrl.isNotBlank() && item.actualMediaUrl in urls)) {
+                        false
+                    } else {
+                        ids.add(item.id)
+                        if (item.actualMediaUrl.isNotBlank()) urls.add(item.actualMediaUrl)
+                        true
+                    }
+                }
+                rawItems = rawItems + uniqueItems
+                // Read client filters again: orientation/sort may change while awaiting a page.
+                val filters = stateFlow.value.filterState
+                val visible = if (filters.sort == SortOption.RANDOM) {
+                    randomItems = applyClientFilters(randomItems, filters) +
+                        applyClientFilters(uniqueItems, filters).shuffled()
+                    randomItems
+                } else applyClientFilters(rawItems, filters)
+                val exhausted = fetched.isEmpty()
+                val duplicateLimit = attempt == 2 && uniqueItems.isEmpty()
+                val finished = exhausted || duplicateLimit ||
+                    (uniqueItems.isNotEmpty() && visible.isNotEmpty()) || attempt == 2
+                stateFlow.value = stateFlow.value.copy(
+                    rawItems = rawItems, mediaItems = visible, currentPage = page + 1,
+                    hasReachedEnd = exhausted || duplicateLimit,
+                    isLoading = !finished && isRefresh && !current.isRefreshing,
+                    isLoadingMore = !finished && !isRefresh,
+                    isRefreshing = !finished && current.isRefreshing,
+                    errorMessage = null, paginationError = null
+                )
+                if (isHome) syncLegacyHomeState()
+                if (finished) break
+                page++
             }
         }
-
         if (isHome) homeJob = newJob else searchJob = newJob
+    }
+
+    fun retryHomePage() {
+        _homeState.value = _homeState.value.copy(paginationError = null)
+        loadNextHomePage()
+    }
+
+    fun retrySearchPage() {
+        _searchState.value = _searchState.value.copy(paginationError = null)
+        loadNextSearchPage()
     }
 
     // ==========================================
@@ -520,7 +469,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
 
     fun setSearchSource(source: MediaSourceConfig) {
         val current = _searchState.value
-        if (current.activeSource.id == source.id) return
+        if (current.activeSource == source) return
 
         val supportedTypes = source.getSupportedMediaTypes()
         val sanitizedFilter = if (current.filterState.mediaType !in supportedTypes) {
@@ -546,6 +495,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
 
     fun executeSearchQuery() {
         _searchState.value = _searchState.value.copy(
+            submittedQuery = _searchState.value.searchQuery.trim(),
             rawItems = emptyList(),
             mediaItems = emptyList(),
             currentPage = 1,
@@ -564,13 +514,13 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
         }
 
         val oldEffectiveQuery = QueryBuilder.buildEffectiveQuery(
-            userQuery = current.searchQuery,
+            userQuery = current.submittedQuery,
             source = current.activeSource,
             mediaType = current.filterState.mediaType,
             rating = current.filterState.rating
         )
         val newEffectiveQuery = QueryBuilder.buildEffectiveQuery(
-            userQuery = current.searchQuery,
+            userQuery = current.submittedQuery,
             source = current.activeSource,
             mediaType = sanitizedFilters.mediaType,
             rating = sanitizedFilters.rating
@@ -599,8 +549,7 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
             isLoading = false,
             isLoadingMore = false,
             errorMessage = null,
-            currentPage = 1,
-            hasReachedEnd = false
+            paginationError = null
         )
         loadSearchData(isRefresh = true)
     }
@@ -649,7 +598,10 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
     // ==========================================
 
     fun addCustomSource(source: MediaSourceConfig) {
-        repository.addSource(source)
+        if (!repository.addSource(source)) {
+            _snackbarMessage.value = "Could not securely save source credentials. Please try again."
+            return
+        }
         if (sourcePickerTarget == "search") {
             setSearchSource(source)
         } else {
@@ -661,7 +613,10 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun updateCustomSource(source: MediaSourceConfig) {
-        repository.updateSource(source)
+        if (!repository.updateSource(source)) {
+            _snackbarMessage.value = "Could not securely save source credentials. Your source was not updated."
+            return
+        }
         if (_homeState.value.activeSource.id == source.id) {
             setHomeSource(source)
         }
@@ -674,7 +629,10 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun deleteSource(sourceId: String) {
-        repository.deleteSource(sourceId)
+        if (!repository.deleteSource(sourceId)) {
+            _snackbarMessage.value = "Could not save source changes. Please try again."
+            return
+        }
         val fallback = repository.sources.value.firstOrNull { it.isBuiltIn }
             ?: MediaSourceConfig.BUILT_IN_SAFEBOORU
 
@@ -726,16 +684,21 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun runDiagnosticsForSource(source: MediaSourceConfig) {
-        viewModelScope.launch {
-            _isDiagnosing.value = true
-            _diagnosticReport.value = null
-            val report = apiClient.diagnoseSource(source)
-            _diagnosticReport.value = report
-            _isDiagnosing.value = false
+        diagnosticJob?.cancel()
+        _isDiagnosing.value = true
+        _diagnosticReport.value = null
+        diagnosticJob = viewModelScope.launch {
+            try {
+                val report = apiClient.diagnoseSource(source)
+                if (isActive) _diagnosticReport.value = report
+            } finally {
+                if (isActive) _isDiagnosing.value = false
+            }
         }
     }
 
     fun dismissSourceDiagnostics() {
+        diagnosticJob?.cancel()
         _diagnosticSource.value = null
         _diagnosticReport.value = null
         _isDiagnosing.value = false
@@ -747,7 +710,10 @@ class MediaBrowserViewModel(application: Application) : AndroidViewModel(applica
             name = "${source.name} (Copy)",
             isBuiltIn = false
         )
-        repository.addSource(newSource)
+        if (!repository.addSource(newSource)) {
+            _snackbarMessage.value = "Could not securely copy source credentials. Please try again."
+            return
+        }
         _snackbarMessage.value = "Created copy of '${source.name}'"
     }
 

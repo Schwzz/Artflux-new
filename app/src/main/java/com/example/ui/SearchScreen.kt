@@ -62,6 +62,7 @@ import com.example.model.FilterState
 import com.example.model.MediaItem
 import com.example.model.MediaSourceConfig
 import com.example.model.ThumbnailQuality
+import com.example.ui.components.FeedPaginationFooter
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingSkeletonGrid
@@ -83,6 +84,7 @@ fun SearchScreen(
     onOpenPicker: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
+    onLoadMore: () -> Unit = {},
     onResetFilters: () -> Unit,
     onOpenLightbox: (Int) -> Unit,
     onDownload: (MediaItem) -> Unit,
@@ -313,7 +315,7 @@ fun SearchScreen(
                         LoadingSkeletonGrid()
                     }
 
-                    searchState.errorMessage != null -> {
+                    searchState.errorMessage != null && searchState.mediaItems.isEmpty() -> {
                         ErrorStateView(
                             errorMessage = searchState.errorMessage,
                             onRetry = onRetry
@@ -323,7 +325,9 @@ fun SearchScreen(
                     searchState.mediaItems.isEmpty() -> {
                         EmptyStateView(
                             hasFilters = searchState.filterState.activeFilterCount > 0 || searchState.searchQuery.isNotBlank(),
-                            onReset = onResetFilters
+                            onReset = onResetFilters,
+                            onLoadMore = onLoadMore.takeIf { !searchState.hasReachedEnd },
+                            paginationError = searchState.paginationError
                         )
                     }
 
@@ -340,7 +344,7 @@ fun SearchScreen(
                         ) {
                             itemsIndexed(
                                 items = searchState.mediaItems,
-                                key = { index, item -> "${item.id}_search_$index" }
+                                key = { _, item -> item.id }
                             ) { index, item ->
                                 MediaCard(
                                     item = item,
@@ -352,20 +356,13 @@ fun SearchScreen(
                                 )
                             }
 
-                            if (searchState.isLoadingMore) {
+                            if (!searchState.hasReachedEnd) {
                                 item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
+                                    FeedPaginationFooter(
+                                        isLoading = searchState.isLoadingMore,
+                                        error = searchState.paginationError,
+                                        onLoadMore = onLoadMore
+                                    )
                                 }
                             }
                         }

@@ -93,8 +93,9 @@ fun MediaBrowserScreen(
             total > 0 && last >= total - 4
         }
     }
-    LaunchedEffect(shouldLoadMoreHome) {
-        if (shouldLoadMoreHome && currentTab == MainTab.HOME) {
+    LaunchedEffect(shouldLoadMoreHome, currentTab, homeState.currentPage, homeState.isLoading,
+        homeState.isLoadingMore, homeState.isRefreshing, homeState.mediaItems.size) {
+        if (shouldLoadMoreHome && currentTab == MainTab.HOME && homeState.mediaItems.isNotEmpty()) {
             viewModel.loadNextHomePage()
         }
     }
@@ -107,8 +108,9 @@ fun MediaBrowserScreen(
             total > 0 && last >= total - 4
         }
     }
-    LaunchedEffect(shouldLoadMoreSearch) {
-        if (shouldLoadMoreSearch && currentTab == MainTab.SEARCH) {
+    LaunchedEffect(shouldLoadMoreSearch, currentTab, searchState.currentPage, searchState.isLoading,
+        searchState.isLoadingMore, searchState.isRefreshing, searchState.mediaItems.size) {
+        if (shouldLoadMoreSearch && currentTab == MainTab.SEARCH && searchState.mediaItems.isNotEmpty()) {
             viewModel.loadNextSearchPage()
         }
     }
@@ -184,6 +186,7 @@ fun MediaBrowserScreen(
                                 onOpenFeedSettings = { isHomeSettingsOpen = true },
                                 onRefresh = { viewModel.refreshHome() },
                                 onRetry = { viewModel.refreshHome() },
+                                onLoadMore = { viewModel.retryHomePage() },
                                 onResetFilters = {
                                     viewModel.setHomeFilterState(FilterState())
                                     viewModel.refreshHome()
@@ -213,6 +216,7 @@ fun MediaBrowserScreen(
                                 onOpenPicker = { viewModel.openSourcePicker("search") },
                                 onRefresh = { viewModel.refreshSearch() },
                                 onRetry = { viewModel.refreshSearch() },
+                                onLoadMore = { viewModel.retrySearchPage() },
                                 onResetFilters = {
                                     viewModel.setSearchQuery("")
                                     viewModel.setSearchFilterState(FilterState())

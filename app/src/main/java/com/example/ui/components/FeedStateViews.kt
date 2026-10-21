@@ -93,7 +93,9 @@ fun LoadingSkeletonGrid() {
 @Composable
 fun EmptyStateView(
     hasFilters: Boolean,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    onLoadMore: (() -> Unit)? = null,
+    paginationError: String? = null
 ) {
     Box(
         modifier = Modifier
@@ -137,6 +139,10 @@ fun EmptyStateView(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
+
+            if (onLoadMore != null) {
+                FeedPaginationFooter(false, paginationError, onLoadMore)
+            }
 
             if (hasFilters) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -220,6 +226,26 @@ fun ErrorStateView(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Retry Connection", color = Color.White)
+            }
+        }
+    }
+}
+
+/** Always offers a manual fallback when automatic pagination cannot fill the viewport. */
+@Composable
+fun FeedPaginationFooter(isLoading: Boolean, error: String?, onLoadMore: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        } else {
+            if (error != null) {
+                Text(error, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+            }
+            Button(onClick = onLoadMore, modifier = Modifier.testTag("feed_load_more")) {
+                Text(if (error != null) "Retry loading more" else "Load more")
             }
         }
     }

@@ -6,54 +6,61 @@ import com.example.model.MediaSourceConfig
 import com.example.model.MediaType
 import com.example.model.SourceDiagnosticReport
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-class MediaApiClient {
-    private val client = OkHttpClient.Builder()
+class MediaApiClient internal constructor(private val client: OkHttpClient) : MediaFetcher {
+    constructor() : this(OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
-        .build()
+        .callTimeout(30, TimeUnit.SECONDS)
+        .build())
 
     private val diagnosticRunner = SourceDiagnosticRunner(client)
 
-    suspend fun fetchMedia(
+    override suspend fun fetchMedia(
         source: MediaSourceConfig,
-        query: String = "",
-        page: Int = 1
+        query: String,
+        page: Int
     ): Result<List<MediaItem>> = withContext(Dispatchers.IO) {
         try {
             val request = MediaRequestBuilder.buildFetchRequest(source, query, page)
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        Exception("HTTP ${response.code}: ${response.message}")
-                    )
-                }
-
-                val bodyString = response.body?.string().orEmpty()
-                if (bodyString.isBlank()) {
-                    return@withContext Result.success(emptyList())
-                }
-
-                val authError = SourceDiagnosticRunner.detectAuthError(bodyString)
-                if (authError != null) {
-                    val sanitized = SourceDiagnosticRunner.sanitizeDiagnosticMessage(authError, source)
-                    return@withContext Result.failure(
-                        Exception("Authentication failed: $sanitized")
-                    )
-                }
-
-                val items = MediaResponseParser.parseMediaItems(source, bodyString)
-                Result.success(items)
+            val response = client.newCall(request).awaitBody()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(
+                    Exception(SourceDiagnosticRunner.sanitizeDiagnosticMessage(
+                        "HTTP ${response.code}: ${response.message}", source
+                    ))
+                )
             }
+
+            val bodyString = response.bodyString
+            if (bodyString.isBlank()) {
+                return@withContext Result.success(emptyList())
+            }
+
+            val authError = SourceDiagnosticRunner.detectAuthError(bodyString)
+            if (authError != null) {
+                val sanitized = SourceDiagnosticRunner.sanitizeDiagnosticMessage(authError, source)
+                return@withContext Result.failure(
+                    Exception("Authentication failed: $sanitized")
+                )
+            }
+
+            val items = MediaResponseParser.parseMediaItems(source, bodyString)
+            Result.success(items)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(SourceDiagnosticRunner.sanitizeDiagnosticMessage(
+                e.message ?: "Failed to connect to source.", source
+            )))
         }
     }
 
-    suspend fun diagnoseSource(source: MediaSourceConfig): SourceDiagnosticReport {
+    override suspend fun diagnoseSource(source: MediaSourceConfig): SourceDiagnosticReport {
         return diagnosticRunner.diagnoseSource(source)
     }
 
