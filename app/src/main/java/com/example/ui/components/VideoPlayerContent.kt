@@ -51,6 +51,7 @@ import com.example.model.MediaItem
 import com.example.util.ArtfluxImageLoader
 import com.example.util.ArtfluxNetwork
 
+@androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 @Composable
 fun VideoPlayerContent(
     item: MediaItem,

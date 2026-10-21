@@ -37,7 +37,7 @@ Artflux already has Compose feeds, source configuration and diagnostics, media p
 
 Regression tests exercise the real view-model paths with controlled responses: source editing, submitted queries, current filters, global sorting, same-page duplicates, refresh failure, explicit retry, filtered-page scanning, bounded duplicate scanning, stale search responses, and dismissed diagnostics. Additional tests cover HTTP-call cancellation, response reading, secret redaction, credential-storage failure, migration retry, encryption round trips, and pagination UI controls.
 
-`git diff --check` passes. Android tests and compilation have **not run**: this environment cannot reach the Gradle distribution server. The initial GitHub write attempt was denied; access was subsequently restored. Android verification is pending the pull-request CI run. A passing CI build does not replace device testing.
+`git diff --check` passes. GitHub Actions has compiled the app and passed **87 unit tests** (including 18 new regression tests). The newly enabled lint check found missing Media3 API opt-ins in the video player; explicit opt-ins were added at that integration boundary. See [pull request #1](https://github.com/Schwzz/Artflux-new/pull/1) for the latest lint and APK build results. Local Android verification remains blocked by Gradle download access. A passing CI build does not replace device testing.
 
 Device checks before a release:
 
