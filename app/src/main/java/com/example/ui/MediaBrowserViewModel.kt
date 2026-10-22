@@ -417,6 +417,8 @@ class MediaBrowserViewModel internal constructor(
         if (!isRefresh && (current.isLoading || current.isLoadingMore || current.isRefreshing ||
                     current.hasReachedEnd || current.paginationError != null)) return
 
+        (if (isHome) homeJob else searchJob)?.cancel()
+
         val health = sourceHealth.value[current.activeSource.id]
         if (health != null && !health.canRetry()) {
             stateFlow.value = current.copy(isLoading = false, isLoadingMore = false, isRefreshing = false,
@@ -426,7 +428,6 @@ class MediaBrowserViewModel internal constructor(
             return
         }
 
-        (if (isHome) homeJob else searchJob)?.cancel()
         stateFlow.value = current.copy(
             isLoading = isRefresh && !current.isRefreshing,
             isLoadingMore = !isRefresh,
@@ -742,8 +743,12 @@ class MediaBrowserViewModel internal constructor(
     }
 
     fun runDiagnosticsForSource(source: MediaSourceConfig) {
-        if (sourceHealth.value[source.id]?.canRetry() == false) { notify("Wait for the source's retry time before checking again."); return }
         diagnosticJob?.cancel()
+        if (sourceHealth.value[source.id]?.canRetry() == false) {
+            _isDiagnosing.value = false
+            _diagnosticReport.value = SourceDiagnosticReport(false, summary = "Wait for the source's retry time before checking again.")
+            return
+        }
         _isDiagnosing.value = true
         _diagnosticReport.value = null
         diagnosticJob = viewModelScope.launch {

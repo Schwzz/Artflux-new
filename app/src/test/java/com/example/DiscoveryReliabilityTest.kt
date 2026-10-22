@@ -211,6 +211,52 @@ class DiscoveryReliabilityTest {
         } finally { store.clear(); Dispatchers.resetMain() }
     }
 
+    @Test fun aNewSearchDuringCooldownCancelsTheOlderRequest() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val pending = CompletableDeferred<Result<List<MediaItem>>>()
+        var calls = 0
+        val vm = MediaBrowserViewModel(context, fetcher { _, _, _ ->
+            calls++
+            if (calls == 1) pending.await()
+            else Result.failure(SourceRequestException(SourceCondition.RATE_LIMITED, 429, System.currentTimeMillis() + 60000))
+        })
+        val store = ViewModelStore().apply { put("vm", vm) }
+        try {
+            runCurrent(); vm.checkSourceHealth(source); runCurrent()
+            vm.searchHome("new-query"); runCurrent()
+            pending.complete(Result.success(listOf(item("stale"))))
+            runCurrent()
+            assertEquals(2, calls)
+            assertEquals("new-query", vm.homeState.value.submittedQuery)
+            assertTrue(vm.homeState.value.rawItems.isEmpty())
+            assertFalse(vm.homeState.value.isLoading)
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
+
+    @Test fun openingCooldownDiagnosticsCancelsThePreviousSourcesReport() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val pending = CompletableDeferred<SourceDiagnosticReport>()
+        val api = object : MediaFetcher {
+            override suspend fun fetchMedia(source: MediaSourceConfig, query: String, page: Int): Result<List<MediaItem>> =
+                if (source.id == this@DiscoveryReliabilityTest.source.id) Result.success(emptyList())
+                else Result.failure(SourceRequestException(SourceCondition.RATE_LIMITED, 429, System.currentTimeMillis() + 60000))
+            override suspend fun diagnoseSource(source: MediaSourceConfig) = pending.await()
+        }
+        val vm = MediaBrowserViewModel(context, api)
+        val store = ViewModelStore().apply { put("vm", vm) }
+        try {
+            runCurrent(); vm.openSourceDiagnostics(source); runCurrent()
+            val other = vm.sources.value.first { it.id != source.id }
+            vm.checkSourceHealth(other); runCurrent()
+            vm.openSourceDiagnostics(other); runCurrent()
+            pending.complete(SourceDiagnosticReport(true, summary = "Stale report")); runCurrent()
+            assertEquals(other.id, vm.diagnosticSource.value!!.id)
+            assertFalse(vm.isDiagnosing.value)
+            assertFalse(vm.diagnosticReport.value!!.isSuccess)
+            assertFalse(vm.diagnosticReport.value!!.summary.contains("Stale"))
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
+
     @Test fun zoomBoundsRespectFittedPortraitAndLandscapeImages() {
         val portrait = ViewerGeometry.clamp(1000f, 1000f, 2f, 400f, 400f, .5f)
         assertEquals(0f, portrait.x, .01f)
