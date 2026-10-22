@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
@@ -43,6 +45,7 @@ class ArtworkDownloads(private val context: Context) {
     private val mutableStorage = MutableStateFlow(OfflineStorageSummary())
     val storage = mutableStorage.asStateFlow()
     private var lastStorageScan = 0L
+    private val refreshMutex = Mutex()
 
     private fun read(): List<ArtworkDownload> = runCatching {
         val a = JSONArray(prefs.getString("records", "[]"))
@@ -83,6 +86,7 @@ class ArtworkDownloads(private val context: Context) {
     }
 
     suspend fun refresh(verifyFiles: Boolean = true) = withContext(Dispatchers.IO) {
+        refreshMutex.withLock {
         val snapshot = mutable.value
         val updates = mutableMapOf<Long, ArtworkDownload>()
         if (snapshot.isNotEmpty()) (manager.query(DownloadManager.Query().setFilterById(*snapshot.map { it.downloadId }.toLongArray()))
@@ -111,6 +115,7 @@ class ArtworkDownloads(private val context: Context) {
             persist()
         }
         if (verifyFiles || System.currentTimeMillis() - lastStorageScan > 10000) scanStorage()
+        }
     }
 
     internal fun scanStorage() {

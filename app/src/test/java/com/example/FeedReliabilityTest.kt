@@ -107,13 +107,13 @@ class FeedReliabilityTest {
         runCurrent()
         vm.refreshHome()
         runCurrent()
-        fetcher.calls.last().result.complete(Result.failure(Exception("Offline")))
+        fetcher.calls.last().result.complete(Result.failure(java.io.IOException("Offline")))
         runCurrent()
         assertEquals(listOf("one"), vm.homeState.value.mediaItems.map { it.id })
         assertEquals(2, vm.homeState.value.currentPage)
         assertNull(vm.homeState.value.errorMessage)
         assertFalse(vm.homeState.value.isRefreshing)
-        assertTrue(vm.snackbarMessage.value!!.contains("Offline"))
+        assertTrue(vm.snackbarMessage.value!!.contains(SourceCondition.UNREACHABLE.guidance))
     }
 
     @Test fun pageFailureWaitsForExplicitRetryAndKeepsPageNumber() = runTest {
@@ -123,13 +123,13 @@ class FeedReliabilityTest {
         runCurrent()
         vm.loadNextHomePage()
         runCurrent()
-        fetcher.calls.last().result.complete(Result.failure(Exception("Offline")))
+        fetcher.calls.last().result.complete(Result.failure(java.io.IOException("Offline")))
         runCurrent()
         val count = fetcher.calls.size
         vm.loadNextHomePage()
         runCurrent()
         assertEquals(count, fetcher.calls.size)
-        assertEquals("Offline", vm.homeState.value.paginationError)
+        assertEquals(SourceCondition.UNREACHABLE.guidance, vm.homeState.value.paginationError)
         vm.retryHomePage()
         runCurrent()
         assertEquals(count + 1, fetcher.calls.size)

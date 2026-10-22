@@ -93,21 +93,32 @@ class HealthStorageViewerUiTest {
     }
 
     @Test fun imageDoubleTapCanBeResetAndControlsCanBeHiddenAndRestored() {
+        val artwork = localImage("zoom")
         compose.setContent { ArtfluxTheme { Surface(Modifier.fillMaxSize()) {
-            LightboxViewer(item("zoom"), 0, 1, onClose = {}, onDownload = {}, onTagClick = {})
+            LightboxViewer(artwork, 0, 1, onClose = {}, onDownload = {}, onTagClick = {})
         } } }
         compose.onNodeWithTag("viewer_image_surface").performTouchInput { doubleClick(Offset(12f, 12f)) }
         compose.onNodeWithTag("viewer_reset_zoom").assertIsDisplayed().performClick()
         compose.onNodeWithTag("viewer_reset_zoom").assertDoesNotExist()
         compose.onNodeWithTag("viewer_image_surface").performTouchInput { click(Offset(12f, 12f)) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
         compose.onNodeWithTag("viewer_show_controls").assertIsDisplayed().performClick()
         compose.onNodeWithTag("lightbox_close_button").assertIsDisplayed()
+    }
+
+    private fun localImage(id: String): MediaItem {
+        val file = File(compose.activity.cacheDir, "$id.png")
+        val bitmap = Bitmap.createBitmap(200, 300, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.CYAN) }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return item(id).copy(actualMediaUrl = file.toURI().toString(), width = 200, height = 300)
     }
 
     private fun capture(name: String) {
         compose.waitForIdle()
         compose.runOnIdle {
-            val view = compose.activity.window.decorView
+            val view = org.robolectric.shadows.ShadowDialog.getLatestDialog()?.takeIf { it.isShowing }?.window?.decorView
+                ?: compose.activity.window.decorView
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(bitmap))
             val folder = File("build/reports/ui").apply { mkdirs() }

@@ -133,7 +133,7 @@ class DiscoveryReliabilityTest {
         val blocked = item("blocked", listOf("sky", "gore"))
         val unrelated = item("unrelated", listOf("forest"))
         val browsing = BrowsingPreferences(blockedTags = listOf(BlockedTag("gore")))
-        assertEquals(listOf(a, b), RelatedArtwork.rank(seed, listOf(seed, b, blocked, unrelated, a, a), browsing))
+        assertEquals(listOf(a, b), RelatedArtwork.rank(seed, listOf(seed, b, blocked, unrelated, a, a, a.copy(id = "mirror", sourceId = "other")), browsing))
         assertEquals(listOf(a), RelatedArtwork.rank(seed, listOf(a, b), browsing, "clouds"))
         assertEquals(listOf("clouds"), RelatedArtwork.tags(seed.copy(tags = listOf("clouds", "-sky", "rating:e", "{bad}", "gore")), browsing))
     }

@@ -29,7 +29,7 @@ object RelatedArtwork {
     fun rank(seed: MediaItem, candidates: List<MediaItem>, browsing: BrowsingPreferences, tag: String? = null): List<MediaItem> {
         val seedTags = seed.tags.map(::normalize).toSet()
         val author = seed.author?.let(::normalize)?.takeIf { it.any(Char::isLetter) && it !in setOf("unknown", "anonymous") }
-        return candidates.distinctBy { it.libraryKey }.filterNot {
+        return candidates.distinctBy { it.libraryKey }.distinctBy { it.actualMediaUrl.ifBlank { it.libraryKey } }.filterNot {
             it.libraryKey == seed.libraryKey || it.actualMediaUrl == seed.actualMediaUrl || browsing.blocks(it)
         }.mapNotNull { candidate ->
             val shared = candidate.tags.map(::normalize).toSet().intersect(seedTags)

@@ -18,7 +18,8 @@ fun RelatedArtworkSheet(state: RelatedArtworkState, quality: ThumbnailQuality, b
     onTag: (String) -> Unit, onMore: () -> Unit, onOpen: (MediaItem) -> Unit, onDismiss: () -> Unit) {
     val local = state.localItems
     val localKeys = local.map { it.libraryKey }.toSet()
-    val remote = state.remoteItems.filterNot { it.libraryKey in localKeys }
+    val localUrls = local.map { it.actualMediaUrl }.filter { it.isNotBlank() }.toSet()
+    val remote = state.remoteItems.filterNot { it.libraryKey in localKeys || it.actualMediaUrl in localUrls }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).testTag("related_artwork_sheet")) {
             Text("Related artwork", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.headlineSmall)

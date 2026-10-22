@@ -1141,7 +1141,8 @@ class MediaBrowserViewModel internal constructor(
     fun openRelatedResult(item: MediaItem) {
         val current = _relatedArtwork.value ?: return
         val viewerIndex = lightboxIndex.value ?: return
-        val items = (current.localItems + current.remoteItems).distinctBy { it.libraryKey }.filterNot { browsing.value.blocks(it) }
+        val items = (current.localItems + current.remoteItems).distinctBy { it.libraryKey }
+            .distinctBy { it.actualMediaUrl.ifBlank { it.libraryKey } }.filterNot { browsing.value.blocks(it) }
         val index = items.indexOfFirst { it.libraryKey == item.libraryKey }
         if (index < 0) return
         relatedJob?.cancel()
