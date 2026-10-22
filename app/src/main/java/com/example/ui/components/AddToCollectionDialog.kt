@@ -192,7 +192,7 @@ fun AddToCollectionDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(collections, key = { it.id }) { collection ->
-                                val inCollection = mediaItem.id in collection.mediaIds
+                                val inCollection = mediaItem.libraryKey in collection.mediaIds
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()

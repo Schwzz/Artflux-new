@@ -98,7 +98,8 @@ fun SettingsScreen(
     savedCount: Int = 0,
     collectionsCount: Int = 0,
     onOpenSavesAndCollections: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    extraSettings: @Composable () -> Unit = {}
 ) {
     var isSourceConfigsExpanded by remember { mutableStateOf(true) }
     var selectedAboutSource by remember { mutableStateOf<MediaSourceConfig?>(null) }
@@ -112,288 +113,37 @@ fun SettingsScreen(
     ) {
         // Settings Header
         Text(
-            text = "Settings & Configuration",
+            text = "Settings",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 20.dp)
         )
 
-        // Saves & Collections Entry
-        SettingsSectionHeader(title = "Saves & Collections", icon = Icons.Default.Bookmark)
-        SettingsCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenSavesAndCollections() }
-                    .padding(16.dp)
-                    .testTag("settings_saves_collections_entry"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FolderSpecial,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Saves & Collections",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = "$savedCount saved artwork • $collectionsCount collections",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Open Saves and Collections",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        extraSettings()
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // 1. Section: Appearance (Theme & Color Palette)
         SettingsSectionHeader(title = "Appearance", icon = Icons.Default.Palette)
         SettingsCard {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Color Theme Selector: Solar Amber vs Aurora Emerald
-                Column {
-                    Text(
-                        text = "Color Theme",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "Select official curated accent palette",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Arctic Signal Option
-                        val isArctic = colorPalette == ColorPalette.ARCTIC_SIGNAL
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isArctic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isArctic) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { onColorPaletteChange(ColorPalette.ARCTIC_SIGNAL) }
-                                .padding(vertical = 12.dp, horizontal = 4.dp)
-                                .testTag("theme_palette_arctic"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Arctic Signal",
-                                    color = if (isArctic) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isArctic) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                                Text(
-                                    text = "Cyan/Violet",
-                                    color = if (isArctic) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.sp
-                                )
-                            }
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Three themes. Each with its own character.", style = MaterialTheme.typography.bodyMedium)
+                ColorPalette.entries.forEach { preset ->
+                    val colors = com.example.ui.theme.artfluxColorScheme(preset)
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(colors.background).border(if (preset == colorPalette) 2.dp else 1.dp,
+                            if (preset == colorPalette) MaterialTheme.colorScheme.primary else colors.outline, RoundedCornerShape(12.dp))
+                        .clickable { onColorPaletteChange(preset) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(colors.primary))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(preset.label, color = colors.onBackground, fontWeight = FontWeight.SemiBold)
+                            Text(preset.subtitle, color = colors.onSurfaceVariant, fontSize = 12.sp)
                         }
-
-                        // Emerald Noir Option
-                        val isEmerald = colorPalette == ColorPalette.EMERALD_NOIR
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isEmerald) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isEmerald) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { onColorPaletteChange(ColorPalette.EMERALD_NOIR) }
-                                .padding(vertical = 12.dp, horizontal = 4.dp)
-                                .testTag("theme_palette_emerald"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Emerald Noir",
-                                    color = if (isEmerald) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isEmerald) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                                Text(
-                                    text = "Emerald/Sapphire",
-                                    color = if (isEmerald) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.sp
-                                )
-                            }
-                        }
-
-                        // Crimson Flux Option
-                        val isCrimson = colorPalette == ColorPalette.CRIMSON_FLUX
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isCrimson) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isCrimson) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { onColorPaletteChange(ColorPalette.CRIMSON_FLUX) }
-                                .padding(vertical = 12.dp, horizontal = 4.dp)
-                                .testTag("theme_palette_crimson"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Crimson Flux",
-                                    color = if (isCrimson) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isCrimson) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 12.sp
-                                )
-                                Text(
-                                    text = "Crimson/Blue",
-                                    color = if (isCrimson) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 9.sp
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Theme Selector: Light vs Dark
-                Column {
-                    Text(
-                        text = "Interface Mode",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "Choose light or dark interface styling",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Light Theme Option
-                        val isLight = theme == AppTheme.LIGHT
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isLight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isLight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { onThemeChange(AppTheme.LIGHT) }
-                                .padding(vertical = 12.dp)
-                                .testTag("theme_option_light"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LightMode,
-                                    contentDescription = null,
-                                    tint = if (isLight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Light",
-                                    color = if (isLight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (isLight) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        // Dark Theme Option
-                        val isDark = theme == AppTheme.DARK
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isDark) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { onThemeChange(AppTheme.DARK) }
-                                .padding(vertical = 12.dp)
-                                .testTag("theme_option_dark"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.DarkMode,
-                                    contentDescription = null,
-                                    tint = if (isDark) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Dark",
-                                    color = if (isDark) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (isDark) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
+                        if (preset == colorPalette) Text("Selected", color = colors.primary, fontSize = 12.sp)
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(20.dp))
 
         // 2. Section: Display (Thumbnail Quality & Blur NSFW Content)
         SettingsSectionHeader(title = "Display", icon = Icons.Default.HighQuality)

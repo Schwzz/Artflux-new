@@ -160,7 +160,7 @@ class FeedReliabilityTest {
             fetcher.calls.last().result.complete(Result.success(listOf(item("one"))))
         }
         runCurrent()
-        assertEquals(5, fetcher.calls.size) // two initial feeds plus three additional pages
+        assertEquals(4, fetcher.calls.size) // one initial feed plus three additional pages
         assertTrue(vm.homeState.value.hasReachedEnd)
         assertFalse(vm.homeState.value.isLoadingMore)
     }
