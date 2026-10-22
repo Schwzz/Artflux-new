@@ -118,6 +118,7 @@ fun ImageViewerContent(
                     scaleX = animatedScale; scaleY = animatedScale; translationX = animatedX; translationY = animatedY
                 }) },
                 error = { state ->
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Card(Modifier.padding(20.dp)) {
                         Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Icon(Icons.Default.Warning, "Load error", tint = MaterialTheme.colorScheme.error)
@@ -126,6 +127,7 @@ fun ImageViewerContent(
                             FilledTonalButton({ reset(); retry++ }, Modifier.testTag("media_retry_button")) { Icon(Icons.Default.Refresh, null); Text("Retry") }
                             if (!local && !preview && smallerUrl != null) TextButton({ reset(); preview = true }) { Text("Load smaller preview") }
                         }
+                    }
                     }
                 })
             if (preview) Surface(Modifier.align(Alignment.TopCenter).padding(8.dp), shape = MaterialTheme.shapes.small) {

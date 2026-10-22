@@ -49,11 +49,11 @@ class HealthStorageViewerUiTest {
         var removed = emptySet<Long>()
         compose.setContent { ArtfluxTheme { OfflineStorageSheet(records, OfflineStorageSummary(1024, 100000, 1, true), {}, { removed = it }, {}, {}) } }
         compose.onNodeWithTag("offline_select_1").performClick()
+        capture("offline-storage")
         compose.onNodeWithTag("remove_selected_offline").performClick()
         assertTrue(removed.isEmpty())
         compose.onNodeWithText("Cancel").performClick()
         assertTrue(removed.isEmpty())
-        capture("offline-storage")
         compose.onNodeWithTag("remove_selected_offline").performClick()
         compose.onNodeWithTag("confirm_remove_offline").performClick()
         assertEquals(setOf(1L), removed)
