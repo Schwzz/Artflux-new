@@ -1098,8 +1098,19 @@ class MediaBrowserViewModel internal constructor(
         val pool = savedItems.value + homeState.value.rawItems + feedCache.values.flatMap { it.rawItems } + downloads.value.map { it.item }
         _relatedArtwork.value = current.copy(selectedTag = tag, localItems = RelatedArtwork.rank(current.seed,
             applyClientFilters(pool, current.filters), browsing.value, tag), remoteItems = emptyList(), loading = false,
-            error = null, nextPage = 1, reachedEnd = false)
+            error = null, nextPage = 1, reachedEnd = false, artistOnly = false)
         loadMoreRelatedArtwork()
+    }
+
+    fun selectRelatedArtist() {
+        val current = _relatedArtwork.value ?: return
+        if (RelatedArtwork.artist(current.seed) == null) return
+        relatedJob?.cancel()
+        val pool = savedItems.value + homeState.value.rawItems + feedCache.values.flatMap { it.rawItems } + downloads.value.map { it.item }
+        val local = RelatedArtwork.rank(current.seed, applyClientFilters(pool, current.filters), browsing.value)
+            .filter { RelatedArtwork.sameArtist(current.seed, it) }
+        _relatedArtwork.value = current.copy(artistOnly = true, selectedTag = null, localItems = local,
+            remoteItems = emptyList(), loading = false, error = null, reachedEnd = true)
     }
 
     fun loadMoreRelatedArtwork() {
@@ -1149,7 +1160,7 @@ class MediaBrowserViewModel internal constructor(
         if (viewerReturns.size >= 5) viewerReturns.removeFirst()
         viewerReturns.addLast(ViewerReturn(lightboxItems.value, viewerIndex, current.copy(loading = false)))
         _relatedArtwork.value = current.copy(open = false, loading = false)
-        _lightboxItems.value = items.map { artworkDownloads.localItem(it) ?: it }
+        _lightboxItems.value = items.map { artworkDownloads.localItem(it, offlineOnly = false) ?: it }
         _lightboxIndex.value = index
     }
 

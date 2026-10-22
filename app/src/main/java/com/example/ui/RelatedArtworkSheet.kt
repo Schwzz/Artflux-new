@@ -15,7 +15,8 @@ import com.example.ui.components.MediaCard
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RelatedArtworkSheet(state: RelatedArtworkState, quality: ThumbnailQuality, blur: Boolean,
-    onTag: (String) -> Unit, onMore: () -> Unit, onOpen: (MediaItem) -> Unit, onDismiss: () -> Unit) {
+    onTag: (String) -> Unit, onMore: () -> Unit, onOpen: (MediaItem) -> Unit, onDismiss: () -> Unit,
+    onArtist: () -> Unit = {}) {
     val local = state.localItems
     val localKeys = local.map { it.libraryKey }.toSet()
     val localUrls = local.map { it.actualMediaUrl }.filter { it.isNotBlank() }.toSet()
@@ -25,13 +26,14 @@ fun RelatedArtworkSheet(state: RelatedArtworkState, quality: ThumbnailQuality, b
             Text("Related artwork", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.headlineSmall)
             Text("Shared tags and artists · ${state.filters.rating.label} · ${state.filters.mediaType.label}", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RelatedArtwork.artist(state.seed)?.let { artist -> FilterChip(state.artistOnly, onArtist, label = { Text("Artist: $artist") }, modifier = Modifier.testTag("related_artist")) }
                 state.tags.forEach { tag -> FilterChip(state.selectedTag == tag, { onTag(tag) }, label = { Text(tag) }) }
             }
             LazyVerticalStaggeredGrid(StaggeredGridCells.Adaptive(150.dp), modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalItemSpacing = 10.dp) {
                 if (local.isNotEmpty()) item(span = StaggeredGridItemSpan.FullLine) { Text("Saved and recently loaded", style = MaterialTheme.typography.titleSmall) }
                 items(local, key = { "local:${it.libraryKey}" }) { item -> MediaCard(item, quality = quality, blurNsfw = blur, onClick = { onOpen(item) }) }
-                if (state.source != null && state.selectedTag != null && state.source.searchParam.isNotBlank()) {
+                if (!state.artistOnly && state.source != null && state.selectedTag != null && state.source.searchParam.isNotBlank()) {
                     item(span = StaggeredGridItemSpan.FullLine) { Text("From ${state.source.name}", style = MaterialTheme.typography.titleSmall) }
                     items(remote, key = { "remote:${it.libraryKey}" }) { item -> MediaCard(item, quality = quality, blurNsfw = blur, onClick = { onOpen(item) }) }
                     item(span = StaggeredGridItemSpan.FullLine) {
@@ -42,7 +44,9 @@ fun RelatedArtworkSheet(state: RelatedArtworkState, quality: ThumbnailQuality, b
                         }
                     }
                 } else item(span = StaggeredGridItemSpan.FullLine) {
-                    Text(if (state.tags.isEmpty()) "This artwork has no searchable tags. Related saved artwork may still match its artist." else "The original source is unavailable or does not support tag searches. Showing local matches.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (state.artistOnly) "Artist matches use author metadata from saved and recently loaded artwork. Choose a tag to search the original source."
+                        else if (state.tags.isEmpty()) "This artwork has no searchable tags. Related saved artwork may still match its artist."
+                        else "The original source is unavailable or does not support tag searches. Showing local matches.", style = MaterialTheme.typography.bodySmall)
                 }
                 if (local.isEmpty() && remote.isEmpty() && !state.loading) item(span = StaggeredGridItemSpan.FullLine) {
                     Text("No related artwork found. Try another tag or save more artwork to build local matches.", style = MaterialTheme.typography.bodyMedium)

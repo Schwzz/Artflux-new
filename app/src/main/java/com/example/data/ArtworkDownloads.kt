@@ -87,34 +87,34 @@ class ArtworkDownloads(private val context: Context) {
 
     suspend fun refresh(verifyFiles: Boolean = true) = withContext(Dispatchers.IO) {
         refreshMutex.withLock {
-        val snapshot = mutable.value
-        val updates = mutableMapOf<Long, ArtworkDownload>()
-        if (snapshot.isNotEmpty()) (manager.query(DownloadManager.Query().setFilterById(*snapshot.map { it.downloadId }.toLongArray()))
-            ?: throw java.io.IOException("Download service unavailable")).use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
-                val old = snapshot.firstOrNull { it.downloadId == id } ?: continue
-                val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val uri = if (status == DownloadManager.STATUS_SUCCESSFUL) manager.getUriForDownloadedFile(id)?.toString() else null
-                var total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                var missing = old.fileMissing
-                if (status == DownloadManager.STATUS_SUCCESSFUL && (verifyFiles || old.status != status || old.localUri != uri)) {
-                    missing = uri == null || runCatching {
-                        context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { descriptor ->
-                            if (descriptor.statSize >= 0) total = descriptor.statSize
-                            true
-                        } ?: false
-                    }.getOrDefault(false).not()
+            val snapshot = mutable.value
+            val updates = mutableMapOf<Long, ArtworkDownload>()
+            if (snapshot.isNotEmpty()) (manager.query(DownloadManager.Query().setFilterById(*snapshot.map { it.downloadId }.toLongArray()))
+                ?: throw java.io.IOException("Download service unavailable")).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
+                    val old = snapshot.firstOrNull { it.downloadId == id } ?: continue
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    val uri = if (status == DownloadManager.STATUS_SUCCESSFUL) manager.getUriForDownloadedFile(id)?.toString() else null
+                    var total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    var missing = old.fileMissing
+                    if (status == DownloadManager.STATUS_SUCCESSFUL && (verifyFiles || old.status != status || old.localUri != uri)) {
+                        missing = uri == null || runCatching {
+                            context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { descriptor ->
+                                if (descriptor.statSize >= 0) total = descriptor.statSize
+                                true
+                            } ?: false
+                        }.getOrDefault(false).not()
+                    }
+                    updates[id] = old.copy(status = status, bytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)),
+                        total = total, reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)), localUri = uri, fileMissing = missing)
                 }
-                updates[id] = old.copy(status = status, bytes = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)),
-                    total = total, reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)), localUri = uri, fileMissing = missing)
             }
-        }
-        synchronized(this@ArtworkDownloads) {
-            mutable.value = mutable.value.map { old -> updates[old.downloadId] ?: if (old in snapshot) old.copy(status = DownloadManager.STATUS_FAILED, localUri = null, fileMissing = old.offline) else old }
-            persist()
-        }
-        if (verifyFiles || System.currentTimeMillis() - lastStorageScan > 10000) scanStorage()
+            synchronized(this@ArtworkDownloads) {
+                mutable.value = mutable.value.map { old -> updates[old.downloadId] ?: if (old in snapshot) old.copy(status = DownloadManager.STATUS_FAILED, localUri = null, fileMissing = old.offline) else old }
+                persist()
+            }
+            if (verifyFiles || System.currentTimeMillis() - lastStorageScan > 10000) scanStorage()
         }
     }
 

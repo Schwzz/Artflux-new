@@ -16,11 +16,11 @@ Select individual records or all visible records, filter missing files, and sort
 
 ## Viewer
 
-The viewer adds accessible previous/next buttons, a page counter, Similar, and zoom reset. Images have animated double-tap zoom, pinch/pan constrained to the fitted image, and tap-to-hide controls. Returning to an image resets its zoom. Error messages explain unavailable files, connection trouble, access restrictions, and rate limits without displaying raw request URLs. An explicit smaller-preview option is offered when available; downloads still use the chosen download quality. Video buffering has an indicator. Link sharing prefers the original post and does not share app-private content URIs as public URLs.
+The viewer adds accessible previous/next buttons, a page counter, Similar, and zoom reset. Images have animated double-tap zoom, pinch zoom anchored at the gesture center and pan constrained to the fitted image, and tap-to-hide controls. Returning to an image resets its zoom. Error messages explain unavailable files, connection trouble, access restrictions, and rate limits without displaying raw request URLs. An explicit smaller-preview option is offered when available; downloads still use the chosen download quality. Video buffering has an indicator. Link sharing prefers the original post and does not share app-private content URIs as public URLs.
 
 ## Related artwork
 
-Tap Similar or a tag in viewer details. Matches use shared tags or matching author metadata from saved/recently loaded artwork. A selected tag can also fetch matches from the artwork's original configured source. This is metadata similarity, not visual/AI image matching. No new paid service is required.
+Tap Similar or a tag in viewer details. Matches use shared tags or matching author metadata from saved/recently loaded artwork. The Artist chip narrows local matches to the same author metadata; numeric uploader IDs are not presented as artist names. A selected tag can also fetch matches from the artwork's original configured source. This is metadata similarity, not visual/AI image matching. No new paid service is required.
 
 Blocked tags and active client filters apply. If the active rating is All, a known seed rating becomes the related search's rating filter. The seed and duplicate keys/URLs are excluded. Missing sources and tagless artwork gracefully fall back to available local matches. Requests are cancelled when the tag changes or the sheet closes; remote exploration is limited to ten pages per tag. Closing a result returns to the related sheet and original viewer. Home's source/query/filter/scroll session is not changed. Up to five nested viewer return points are retained.
 

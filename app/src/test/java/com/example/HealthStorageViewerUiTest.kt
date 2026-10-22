@@ -61,13 +61,16 @@ class HealthStorageViewerUiTest {
     }
 
     @Test fun relatedSheetOpensTheChosenResultAndShowsMetadataMeaning() {
-        val seed = item("seed")
+        val seed = item("seed").copy(author = "Artist")
         val match = item("match")
         var opened: MediaItem? = null
+        var artistSelected = false
         compose.setContent { ArtfluxTheme { RelatedArtworkSheet(RelatedArtworkState(seed, null, listOf("sky"), "sky", FilterState(), localItems = listOf(match)),
-            ThumbnailQuality.Q720, false, {}, {}, { opened = it }, {}) } }
+            ThumbnailQuality.Q720, false, {}, {}, { opened = it }, {}, onArtist = { artistSelected = true }) } }
         compose.onNodeWithTag("media_item_card_match").performClick()
         assertEquals(match, opened)
+        compose.onNodeWithTag("related_artist").performClick()
+        assertTrue(artistSelected)
         capture("related-artwork")
     }
 

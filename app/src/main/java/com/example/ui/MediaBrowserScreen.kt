@@ -175,7 +175,7 @@ fun MediaBrowserScreen(viewModel: MediaBrowserViewModel, modifier: Modifier = Mo
             onDownloadItem = viewModel::promptDownload, onExploreRelated = viewModel::openRelatedArtwork, mediaActive = related?.open != true) }
     } }
     related?.takeIf { it.open }?.let { RelatedArtworkSheet(it, quality, blur, viewModel::selectRelatedTag,
-        viewModel::loadMoreRelatedArtwork, viewModel::openRelatedResult, viewModel::dismissRelatedArtwork) }
+        viewModel::loadMoreRelatedArtwork, viewModel::openRelatedResult, viewModel::dismissRelatedArtwork, viewModel::selectRelatedArtist) }
 }
 
 @Composable

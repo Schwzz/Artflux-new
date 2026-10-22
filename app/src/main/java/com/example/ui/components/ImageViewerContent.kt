@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -64,7 +65,7 @@ fun ImageViewerContent(
         }.build()
     }
     Box(modifier.fillMaxSize().padding(top = if (chromeVisible) 70.dp else 0.dp, bottom = if (chromeVisible) 150.dp else 0.dp), contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().onSizeChanged { viewport = it }
+        Box(Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewport = it }
             .testTag("viewer_image_surface")
             .pointerInput(item.libraryKey) {
                 detectTapGestures(onTap = { onTap() }, onDoubleTap = { tap ->
@@ -84,7 +85,12 @@ fun ImageViewerContent(
                         if (pointers >= 2) {
                             transforming = true
                             val pan = event.calculatePan()
-                            move(scale * event.calculateZoom(), x + pan.x, y + pan.y)
+                            val centroid = event.calculateCentroid(useCurrent = false)
+                            val pivotX = centroid.x - viewport.width / 2f
+                            val pivotY = centroid.y - viewport.height / 2f
+                            val nextScale = (scale * event.calculateZoom()).coerceIn(1f, 5f)
+                            val ratio = nextScale / scale
+                            move(nextScale, (x - pivotX) * ratio + pivotX + pan.x, (y - pivotY) * ratio + pivotY + pan.y)
                             event.changes.forEach { it.consume() }
                         } else if (scale > 1.05f && pointers > 0) {
                             val pan = event.calculatePan()

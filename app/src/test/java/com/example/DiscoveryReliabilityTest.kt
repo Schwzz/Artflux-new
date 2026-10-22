@@ -135,13 +135,15 @@ class DiscoveryReliabilityTest {
         val browsing = BrowsingPreferences(blockedTags = listOf(BlockedTag("gore")))
         assertEquals(listOf(a, b), RelatedArtwork.rank(seed, listOf(seed, b, blocked, unrelated, a, a, a.copy(id = "mirror", sourceId = "other")), browsing))
         assertEquals(listOf(a), RelatedArtwork.rank(seed, listOf(a, b), browsing, "clouds"))
+        assertTrue(RelatedArtwork.sameArtist(seed, unrelated.copy(author = "artist")))
+        assertNull(RelatedArtwork.artist(seed.copy(author = "12345")))
         assertEquals(listOf("clouds"), RelatedArtwork.tags(seed.copy(tags = listOf("clouds", "-sky", "rating:e", "{bad}", "gore")), browsing))
     }
 
     @Test fun relatedBrowsingRestoresViewerAndNeverChangesHomeSession() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val seed = item("seed")
-        val match = item("match")
+        val seed = item("seed").copy(author = "Artist")
+        val match = item("match").copy(author = "artist")
         val blocked = item("blocked", listOf("sky", "gore"))
         val adult = item("adult", rating = MediaRating.ADULT)
         val vm = MediaBrowserViewModel(context, fetcher { _, query, _ -> Result.success(if (query.isEmpty()) listOf(seed, match) else listOf(seed, match, blocked, adult)) })
@@ -161,6 +163,10 @@ class DiscoveryReliabilityTest {
             vm.closeLightbox()
             assertEquals(seed.id, vm.lightboxItems.value[vm.lightboxIndex.value!!].id)
             assertTrue(vm.relatedArtwork.value!!.open)
+            vm.selectRelatedArtist(); runCurrent()
+            assertTrue(vm.relatedArtwork.value!!.artistOnly)
+            assertEquals(listOf(match), vm.relatedArtwork.value!!.localItems)
+            assertTrue(vm.relatedArtwork.value!!.remoteItems.isEmpty())
             vm.dismissRelatedArtwork()
             assertEquals(before, vm.homeState.value)
         } finally { store.clear(); Dispatchers.resetMain() }
