@@ -28,7 +28,8 @@ fun HomeHub(
     onQueryChange: (String) -> Unit, onSearch: (String) -> Unit, onSources: () -> Unit, onFilters: () -> Unit,
     onFilterChange: (FilterState) -> Unit, onRefresh: () -> Unit, onMore: () -> Unit,
     onOpen: (Int) -> Unit, onDownload: (MediaItem) -> Unit, onSaveSearch: () -> Unit,
-    onSavedSearch: (SavedSearch) -> Unit, onRemoveSavedSearch: (String) -> Unit, onClearHistory: () -> Unit
+    onSavedSearch: (SavedSearch) -> Unit, onRemoveSavedSearch: (String) -> Unit, onClearHistory: () -> Unit,
+    health: SourceHealth? = null, onHealth: () -> Unit = {}
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(state.submittedQuery.isNotBlank()) }
     val focus = LocalFocusManager.current
@@ -53,6 +54,7 @@ fun HomeHub(
                 }
             }
         }
+        SourceHealthNotice(health, onHealth)
         if (searchOpen) {
             OutlinedTextField(value = state.searchQuery, onValueChange = onQueryChange, singleLine = true,
                 placeholder = { Text("Search tags, artists, or subjects") },

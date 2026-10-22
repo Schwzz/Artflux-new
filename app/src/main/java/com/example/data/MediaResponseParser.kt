@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 object MediaResponseParser {
 
-    fun parseMediaItems(source: MediaSourceConfig, body: String): List<MediaItem> {
+    fun parseMediaItems(source: MediaSourceConfig, body: String, strict: Boolean = false): List<MediaItem> {
         val trimmed = body.trim()
         val itemsArray: JSONArray = if (trimmed.startsWith("[")) {
             JSONArray(trimmed)
@@ -23,9 +23,10 @@ object MediaResponseParser {
                     rootObj.has("results") -> rootObj.optJSONArray("results")
                     rootObj.has("images") -> rootObj.optJSONArray("images")
                     else -> null
-                } ?: JSONArray()
+                } ?: if (strict) throw org.json.JSONException("No results array") else JSONArray()
             } else {
-                JsonPathExtractor.extractNestedJsonArray(rootObj, source.itemsPath) ?: JSONArray()
+                JsonPathExtractor.extractNestedJsonArray(rootObj, source.itemsPath)
+                    ?: if (strict) throw org.json.JSONException("Configured results path was not found") else JSONArray()
             }
         }
 
@@ -37,6 +38,7 @@ object MediaResponseParser {
                 result.add(item)
             }
         }
+        if (strict && itemsArray.length() > 0 && result.isEmpty()) throw org.json.JSONException("No mapped media URLs")
         return result
     }
 

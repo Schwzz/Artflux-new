@@ -28,7 +28,8 @@ fun LibraryHub(
     onCreate: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
     onAdd: (String, List<MediaItem>) -> Unit, onRemove: (Set<String>) -> Unit,
     onDownload: (List<MediaItem>, Boolean) -> Unit, onRetry: (ArtworkDownload) -> Unit, onRemoveDownload: (Long) -> Unit,
-    onRemoveFromCollection: (String, Set<String>) -> Unit = { _, _ -> }
+    onRemoveFromCollection: (String, Set<String>) -> Unit = { _, _ -> },
+    onStorage: () -> Unit = {}
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -40,9 +41,11 @@ fun LibraryHub(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
+    var removeOfflineRecord by remember { mutableStateOf<ArtworkDownload?>(null) }
     val collection = collections.firstOrNull { it.id == selectedCollection }
     val offlineKeys = downloads.filter { it.offline && it.complete }.map { it.item.libraryKey }.toSet()
-    val visible = items.filterNot { browsing.blocks(it) }.filter { item ->
+    val libraryItems = if (tab == 2) (downloads.filter { it.offline && it.complete }.map { it.item } + items).distinctBy { it.libraryKey } else items
+    val visible = libraryItems.filterNot { browsing.blocks(it) }.filter { item ->
         (collection == null || item.libraryKey in collection.mediaIds) && (tab != 2 || item.libraryKey in offlineKeys) &&
             (query.isBlank() || listOf(item.title, item.author.orEmpty(), item.sourceName).any { it.contains(query, true) } || item.tags.any { it.contains(query, true) })
     }
@@ -57,6 +60,7 @@ fun LibraryHub(
                 Text(collection?.name ?: "Your library", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text("${visible.size} artworks · ${offlineKeys.size} offline", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            IconButton(onStorage, Modifier.testTag("library_storage_button")) { Icon(Icons.Default.Storage, "Manage offline storage") }
             if (collection != null) {
                 IconButton({ name = collection.name; renameDialog = true }) { Icon(Icons.Default.Edit, "Rename collection") }
                 IconButton({ confirmDelete = true }) { Icon(Icons.Default.DeleteOutline, "Delete collection") }
@@ -81,8 +85,8 @@ fun LibraryHub(
                             if (record.total > 0 && !record.complete) LinearProgressIndicator(progress = { (record.bytes.toFloat() / record.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                             Row {
                                 if (record.complete) TextButton({ onOpen(0, listOf(record.item), record.offline) }) { Text("Open") }
-                                if (record.status == android.app.DownloadManager.STATUS_FAILED) TextButton({ onRetry(record) }) { Text("Retry") }
-                                TextButton({ onRemoveDownload(record.downloadId) }) { Text(if (record.offline && record.complete) "Remove offline copy" else if (record.complete) "Clear record" else "Cancel") }
+                                if (record.status == android.app.DownloadManager.STATUS_FAILED || record.fileMissing) TextButton({ onRetry(record) }) { Text("Retry") }
+                                TextButton({ if (record.offline && record.complete) removeOfflineRecord = record else onRemoveDownload(record.downloadId) }) { Text(if (record.offline && record.complete) "Remove offline copy" else if (record.complete) "Clear record" else if (record.fileMissing) "Clear record" else "Cancel") }
                             }
                         }
                     }
@@ -132,6 +136,10 @@ fun LibraryHub(
             }
         }
     }
+    removeOfflineRecord?.let { record -> AlertDialog(onDismissRequest = { removeOfflineRecord = null }, title = { Text("Remove offline copy?") },
+        text = { Text("Delete the local file for ${record.item.title}. Your saved artwork and collections are kept.") },
+        confirmButton = { TextButton({ onRemoveDownload(record.downloadId); removeOfflineRecord = null }) { Text("Remove copy") } },
+        dismissButton = { TextButton({ removeOfflineRecord = null }) { Text("Cancel") } }) }
     if (createDialog || renameDialog) AlertDialog(onDismissRequest = { createDialog = false; renameDialog = false },
         title = { Text(if (renameDialog) "Rename collection" else "New collection") }, text = { OutlinedTextField(name, { name = it.take(100) }, label = { Text("Name") }, singleLine = true) },
         confirmButton = { TextButton(onClick = { if (renameDialog && collection != null) onRename(collection.id, name) else onCreate(name); createDialog = false; renameDialog = false }, enabled = name.isNotBlank()) { Text("Save") } },

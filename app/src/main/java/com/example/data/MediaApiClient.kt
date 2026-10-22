@@ -29,11 +29,7 @@ class MediaApiClient internal constructor(private val client: OkHttpClient) : Me
             val request = MediaRequestBuilder.buildFetchRequest(source, query, page)
             val response = client.newCall(request).awaitBody()
             if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    Exception(SourceDiagnosticRunner.sanitizeDiagnosticMessage(
-                        "HTTP ${response.code}: ${response.message}", source
-                    ))
-                )
+                return@withContext Result.failure(SourceRequestException.http(response.code, response.retryAfter))
             }
 
             val bodyString = response.bodyString
@@ -43,20 +39,15 @@ class MediaApiClient internal constructor(private val client: OkHttpClient) : Me
 
             val authError = SourceDiagnosticRunner.detectAuthError(bodyString)
             if (authError != null) {
-                val sanitized = SourceDiagnosticRunner.sanitizeDiagnosticMessage(authError, source)
-                return@withContext Result.failure(
-                    Exception("Authentication failed: $sanitized")
-                )
+                return@withContext Result.failure(SourceRequestException(com.example.model.SourceCondition.AUTH_REQUIRED))
             }
 
-            val items = MediaResponseParser.parseMediaItems(source, bodyString)
+            val items = MediaResponseParser.parseMediaItems(source, bodyString, strict = true)
             Result.success(items)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Result.failure(Exception(SourceDiagnosticRunner.sanitizeDiagnosticMessage(
-                e.message ?: "Failed to connect to source.", source
-            )))
+            Result.failure(SourceRequestException.from(e))
         }
     }
 

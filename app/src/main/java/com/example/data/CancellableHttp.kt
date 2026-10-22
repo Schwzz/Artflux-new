@@ -12,7 +12,8 @@ internal data class HttpResponseSnapshot(
     val code: Int,
     val isSuccessful: Boolean,
     val message: String,
-    val bodyString: String
+    val bodyString: String,
+    val retryAfter: String? = null
 )
 
 /** Cancellation covers both waiting for headers and reading the response body. */
@@ -26,7 +27,7 @@ internal suspend fun Call.awaitBody(): HttpResponseSnapshot = suspendCancellable
         override fun onResponse(call: Call, response: Response) {
             try {
                 val snapshot = response.use {
-                    HttpResponseSnapshot(it.code, it.isSuccessful, it.message, it.body?.string().orEmpty())
+                    HttpResponseSnapshot(it.code, it.isSuccessful, it.message, it.body?.string().orEmpty(), it.header("Retry-After"))
                 }
                 continuation.resume(snapshot)
             } catch (e: Exception) {

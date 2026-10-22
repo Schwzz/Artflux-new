@@ -47,7 +47,7 @@ fun LightboxTopBar(
         IconButton(
             onClick = onClose,
             modifier = Modifier
-                .size(42.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
