@@ -59,19 +59,20 @@ fun LightboxBottomActionBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = navBarPadding + 16.dp, start = 24.dp, end = 24.dp),
+            .padding(bottom = navBarPadding + 12.dp, start = 12.dp, end = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(24.dp)),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
             tonalElevation = 6.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Save / Bookmark Button
@@ -144,7 +145,8 @@ fun LightboxBottomActionBar(
                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_SUBJECT, item.title)
-                            putExtra(Intent.EXTRA_TEXT, "${item.title} - ${item.actualMediaUrl}")
+                            val link = item.postUrl ?: item.actualMediaUrl.takeIf { it.startsWith("http://") || it.startsWith("https://") }
+                            putExtra(Intent.EXTRA_TEXT, if (link == null) item.title else "${item.title} - $link")
                         }
                         context.startActivity(Intent.createChooser(sendIntent, "Share Media Link"))
                     },

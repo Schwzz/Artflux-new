@@ -2,9 +2,9 @@ name: Android CI & Build
 
 on:
   push:
-    branches: [ main, master, codex/artflux-reliability ]
+    branches: [ main, master, codex/artflux-reliability, codex/artflux-home-library ]
   pull_request:
-    branches: [ main, master, codex/artflux-reliability ]
+    branches: [ main, master, codex/artflux-reliability, codex/artflux-home-library ]
   workflow_dispatch:
 
 permissions:

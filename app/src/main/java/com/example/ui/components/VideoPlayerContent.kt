@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -64,6 +65,8 @@ fun VideoPlayerContent(
     var playbackError by remember(item.id) { mutableStateOf<String?>(null) }
     var videoRetryTrigger by remember(item.id) { mutableIntStateOf(0) }
 
+    var buffering by remember(item.libraryKey) { mutableStateOf(true) }
+
     val exoPlayer = remember(item.id, item.actualMediaUrl, isCurrentPage, videoRetryTrigger) {
         if (isCurrentPage) {
             val requestHeaders = ArtfluxNetwork.getHeadersForUrl(item.actualMediaUrl)
@@ -93,25 +96,11 @@ fun VideoPlayerContent(
                     playWhenReady = true
                     addListener(object : Player.Listener {
                         override fun onPlayerError(error: PlaybackException) {
-                            val codeName = error.errorCodeName
-                            val cause = error.cause
-                            val causeDetails = when (cause) {
-                                is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> {
-                                    "HTTP ${cause.responseCode} (${cause.responseMessage ?: "Error"})"
-                                }
-                                is androidx.media3.datasource.HttpDataSource.InvalidContentTypeException -> {
-                                    "Invalid Content-Type: ${cause.contentType} (expected video stream)"
-                                }
-                                is androidx.media3.datasource.HttpDataSource.HttpDataSourceException -> {
-                                    cause.message ?: "Network stream failure"
-                                }
-                                else -> {
-                                    cause?.message ?: error.message ?: "Playback failure"
-                                }
-                            }
-                            playbackError = "$codeName: $causeDetails"
+                            buffering = false
+                            playbackError = MediaLoadMessage.forError(error, item.actualMediaUrl.startsWith("content:") || item.actualMediaUrl.startsWith("file:"))
                         }
                         override fun onPlaybackStateChanged(playbackState: Int) {
+                            buffering = playbackState == Player.STATE_BUFFERING
                             if (playbackState == Player.STATE_READY) {
                                 playbackError = null
                             }
@@ -153,7 +142,7 @@ fun VideoPlayerContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(top = 60.dp, bottom = 80.dp, start = 8.dp, end = 8.dp),
+            .padding(top = 70.dp, bottom = 150.dp, start = 8.dp, end = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         // Instant preview placeholder while video prepares/buffers
@@ -195,6 +184,8 @@ fun VideoPlayerContent(
             )
         }
 
+        if (isCurrentPage && buffering && playbackError == null) CircularProgressIndicator(Modifier.align(Alignment.Center).size(32.dp))
+
         // Playback error overlay
         if (playbackError != null) {
             Card(
@@ -232,6 +223,7 @@ fun VideoPlayerContent(
                     FilledTonalButton(
                         onClick = {
                             playbackError = null
+                            buffering = true
                             videoRetryTrigger++
                         },
                         modifier = Modifier.testTag("video_retry_button")

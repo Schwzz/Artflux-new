@@ -3,6 +3,10 @@ package com.example.ui.components
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.launch
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -46,7 +55,10 @@ fun LightboxViewer(
     isSaved: (String) -> Boolean = { false },
     onToggleSave: ((MediaItem) -> Unit)? = null,
     onOpenAddToCollection: ((MediaItem) -> Unit)? = null,
-    onUndoUnsave: (() -> Unit)? = null
+    onUndoUnsave: (() -> Unit)? = null,
+    onDownloadItem: ((MediaItem) -> Unit)? = null,
+    onExploreRelated: ((MediaItem, String?) -> Unit)? = null,
+    mediaActive: Boolean = true
 ) {
     val effectiveItems = if (itemsList.isNotEmpty()) itemsList else listOf(item)
     val safeInitialPage = currentIndex.coerceIn(0, (effectiveItems.size - 1).coerceAtLeast(0))
@@ -54,12 +66,16 @@ fun LightboxViewer(
 
     var showInfoSheet by remember { mutableStateOf(false) }
     var activeZoomScale by remember { mutableFloatStateOf(1f) }
+    var chromeVisible by remember { mutableStateOf(true) }
+    var resetZoom by remember { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(pagerState.currentPage) {
         onIndexChanged(pagerState.currentPage)
         activeZoomScale = 1f
+        chromeVisible = true
+        showInfoSheet = false
     }
 
     val currentItem = effectiveItems.getOrNull(pagerState.currentPage) ?: item
@@ -90,8 +106,8 @@ fun LightboxViewer(
 
             if (pageItem.mediaType == MediaType.VIDEO) {
                 // Video Player with ExoPlayer
-                key(pageItem.id) {
-                    val isCurrentPage = pagerState.currentPage == pageIndex
+                key(pageItem.libraryKey) {
+                    val isCurrentPage = pagerState.currentPage == pageIndex && mediaActive
                     VideoPlayerContent(
                         item = pageItem,
                         isCurrentPage = isCurrentPage,
@@ -106,20 +122,33 @@ fun LightboxViewer(
                     isCurrentPage = isCurrentPage,
                     onZoomScaleChanged = { scale ->
                         activeZoomScale = scale
-                    }
+                    },
+                    chromeVisible = chromeVisible,
+                    resetZoomKey = resetZoom,
+                    onTap = { chromeVisible = !chromeVisible }
                 )
             }
         }
 
-        // Top Bar: Clean, with Close button and Media Type Indicator (NO "1/75" counter)
-        LightboxTopBar(
+        if (chromeVisible) LightboxTopBar(
             item = currentItem,
             onClose = onClose,
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // Bottom Action Bar: Info, Share, Download (Comfortable spacing & system insets)
-        LightboxBottomActionBar(
+        if (chromeVisible) Column(Modifier.align(Alignment.BottomCenter)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+                IconButton({ coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } }, enabled = pagerState.currentPage > 0,
+                    modifier = Modifier.testTag("viewer_previous")) { Icon(Icons.Default.ChevronLeft, "Previous artwork") }
+                Text("${pagerState.currentPage + 1} / ${effectiveItems.size}", style = MaterialTheme.typography.labelMedium)
+                if (onExploreRelated != null) TextButton({ onExploreRelated(currentItem, null) }, Modifier.testTag("viewer_related")) {
+                    Icon(Icons.Default.ImageSearch, null); Text("Similar")
+                }
+                if (activeZoomScale > 1.05f) IconButton({ resetZoom++ }, Modifier.testTag("viewer_reset_zoom")) { Icon(Icons.Default.ZoomOutMap, "Reset zoom") }
+                IconButton({ coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } }, enabled = pagerState.currentPage < effectiveItems.lastIndex,
+                    modifier = Modifier.testTag("viewer_next")) { Icon(Icons.Default.ChevronRight, "Next artwork") }
+            }
+            LightboxBottomActionBar(
             item = currentItem,
             isSaved = isSaved(currentItem.libraryKey),
             showInfoSheet = showInfoSheet,
@@ -129,15 +158,18 @@ fun LightboxViewer(
             onOpenAddToCollection = onOpenAddToCollection,
             onUndoUnsave = onUndoUnsave,
             onToggleInfoSheet = { showInfoSheet = !showInfoSheet },
-            onDownload = onDownload,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+            onDownload = { if (onDownloadItem != null) onDownloadItem(currentItem) else onDownload() }
+            )
+        }
+        if (!chromeVisible) IconButton({ chromeVisible = true }, Modifier.align(Alignment.TopEnd).padding(top = 32.dp, end = 12.dp).testTag("viewer_show_controls")) {
+            Icon(Icons.Default.FullscreenExit, "Show viewer controls")
+        }
 
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = navBarPadding + 84.dp)
+                .padding(bottom = navBarPadding + 140.dp)
                 .testTag("lightbox_snackbar_host")
         )
 
@@ -149,8 +181,8 @@ fun LightboxViewer(
                 onBlockTag = onBlockTag,
                 onTagClick = { tag ->
                     showInfoSheet = false
-                    onClose()
-                    onTagClick(tag)
+                    if (onExploreRelated != null) onExploreRelated(currentItem, tag)
+                    else { onClose(); onTagClick(tag) }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )

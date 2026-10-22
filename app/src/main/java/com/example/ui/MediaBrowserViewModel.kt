@@ -65,6 +65,17 @@ class MediaBrowserViewModel internal constructor(
     val browsing = browsingRepository.state
     private val artworkDownloads = ArtworkDownloads(application.applicationContext)
     val downloads = artworkDownloads.state
+    val offlineStorage = artworkDownloads.storage
+    private val healthRepository = SourceHealthRepository(application.applicationContext)
+    val sourceHealth = healthRepository.state
+    private val _checkingSources = MutableStateFlow<Set<String>>(emptySet())
+    val checkingSources = _checkingSources.asStateFlow()
+    private val healthJobs = mutableMapOf<String, Job>()
+    private val _relatedArtwork = MutableStateFlow<RelatedArtworkState?>(null)
+    val relatedArtwork = _relatedArtwork.asStateFlow()
+    private var relatedJob: Job? = null
+    private data class ViewerReturn(val items: List<MediaItem>, val index: Int, val related: RelatedArtworkState)
+    private val viewerReturns = ArrayDeque<ViewerReturn>()
     private val _pendingBackup = MutableStateFlow<ArtfluxBackup?>(null)
     val pendingBackup = _pendingBackup.asStateFlow()
     private val feedCache = mutableMapOf<String, FeedState>()
@@ -406,6 +417,15 @@ class MediaBrowserViewModel internal constructor(
         if (!isRefresh && (current.isLoading || current.isLoadingMore || current.isRefreshing ||
                     current.hasReachedEnd || current.paginationError != null)) return
 
+        val health = sourceHealth.value[current.activeSource.id]
+        if (health != null && !health.canRetry()) {
+            stateFlow.value = current.copy(isLoading = false, isLoadingMore = false, isRefreshing = false,
+                errorMessage = if (current.mediaItems.isEmpty()) health.condition.guidance else null,
+                paginationError = if (!isRefresh) health.condition.guidance else null)
+            if (isHome) syncLegacyHomeState()
+            return
+        }
+
         (if (isHome) homeJob else searchJob)?.cancel()
         stateFlow.value = current.copy(
             isLoading = isRefresh && !current.isRefreshing,
@@ -432,7 +452,8 @@ class MediaBrowserViewModel internal constructor(
                 val error = result.exceptionOrNull()
                 if (error != null) {
                     if (error is CancellationException) throw error
-                    val message = error.message ?: "Failed to connect to source."
+                    healthRepository.failure(source.id, error)
+                    val message = SourceRequestException.from(error).message ?: "Failed to connect to source."
                     val keepArtwork = stateFlow.value.mediaItems.isNotEmpty()
                     stateFlow.value = stateFlow.value.copy(
                         isLoading = false, isLoadingMore = false, isRefreshing = false,
@@ -445,6 +466,7 @@ class MediaBrowserViewModel internal constructor(
                 }
 
                 val fetched = result.getOrThrow()
+                healthRepository.success(source.id)
                 browsingRepository.rememberTags(fetched.flatMap { it.tags })
                 val ids = rawItems.map { it.id }.toMutableSet()
                 val urls = rawItems.map { it.actualMediaUrl }.filter { it.isNotBlank() }.toMutableSet()
@@ -649,6 +671,8 @@ class MediaBrowserViewModel internal constructor(
             _snackbarMessage.value = "Could not securely save source credentials. Your source was not updated."
             return
         }
+        healthJobs.remove(source.id)?.cancel()
+        healthRepository.remove(source.id)
         if (_homeState.value.activeSource.id == source.id) {
             setHomeSource(source)
         }
@@ -665,6 +689,8 @@ class MediaBrowserViewModel internal constructor(
             _snackbarMessage.value = "Could not save source changes. Please try again."
             return
         }
+        healthJobs.remove(sourceId)?.cancel()
+        healthRepository.remove(sourceId)
         val fallback = repository.sources.value.firstOrNull { it.isBuiltIn }
             ?: MediaSourceConfig.BUILT_IN_SAFEBOORU
 
@@ -716,13 +742,23 @@ class MediaBrowserViewModel internal constructor(
     }
 
     fun runDiagnosticsForSource(source: MediaSourceConfig) {
+        if (sourceHealth.value[source.id]?.canRetry() == false) { notify("Wait for the source's retry time before checking again."); return }
         diagnosticJob?.cancel()
         _isDiagnosing.value = true
         _diagnosticReport.value = null
         diagnosticJob = viewModelScope.launch {
             try {
                 val report = apiClient.diagnoseSource(source)
-                if (isActive) _diagnosticReport.value = report
+                if (isActive) {
+                    _diagnosticReport.value = report
+                    if (report.isSuccess) healthRepository.success(source.id)
+                    else healthRepository.failure(source.id, if (report.httpStatus >= 400) SourceRequestException.http(report.httpStatus)
+                        else SourceRequestException(if (report.httpStatus == 0) SourceCondition.UNREACHABLE else SourceCondition.CONFIGURATION))
+                }
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                healthRepository.failure(source.id, e)
+                _diagnosticReport.value = SourceDiagnosticReport(false, summary = SourceRequestException.from(e).message.orEmpty())
             } finally {
                 if (isActive) _isDiagnosing.value = false
             }
@@ -760,8 +796,10 @@ class MediaBrowserViewModel internal constructor(
     // ==========================================
 
     fun openLightbox(index: Int, items: List<MediaItem>) {
+        dismissRelatedArtwork()
+        viewerReturns.clear()
         _lightboxItems.value = items
-        _lightboxIndex.value = index
+        _lightboxIndex.value = index.takeIf { it in items.indices }
     }
 
     fun openLightbox(index: Int) {
@@ -769,6 +807,14 @@ class MediaBrowserViewModel internal constructor(
     }
 
     fun closeLightbox() {
+        val previous = viewerReturns.removeLastOrNull()
+        if (previous != null) {
+            _lightboxItems.value = previous.items
+            _lightboxIndex.value = previous.index
+            _relatedArtwork.value = previous.related.copy(open = true)
+            return
+        }
+        dismissRelatedArtwork()
         _lightboxIndex.value = null
         _lightboxItems.value = emptyList()
     }
@@ -911,6 +957,7 @@ class MediaBrowserViewModel internal constructor(
     private fun reapplyBlockedTags() {
         _homeState.value = _homeState.value.copy(mediaItems = applyClientFilters(_homeState.value.rawItems, _homeState.value.filterState))
         _searchState.value = _searchState.value.copy(mediaItems = applyClientFilters(_searchState.value.rawItems, _searchState.value.filterState))
+        viewerReturns.clear()
         closeLightbox()
         syncLegacyHomeState()
     }
@@ -928,16 +975,37 @@ class MediaBrowserViewModel internal constructor(
             notify("$queued ${if (offline) "offline copies" else "downloads"} queued${if (failed > 0) "; $failed failed" else ""}")
         }
     }
-    suspend fun refreshDownloads() { runCatching { artworkDownloads.refresh() } }
-    fun removeDownload(id: Long) { artworkDownloads.remove(id) }
+    suspend fun refreshDownloads(verifyFiles: Boolean = false) {
+        try { artworkDownloads.refresh(verifyFiles) } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+    }
+    fun scanOfflineStorage() { viewModelScope.launch {
+        try { artworkDownloads.refresh(true) } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { notify("Could not verify offline files. Check device storage and try again.") }
+    } }
+    fun removeOfflineDownloads(ids: Set<Long>) {
+        val selected = ids.toSet()
+        viewModelScope.launch(Dispatchers.IO) {
+            val removed = artworkDownloads.removeOffline(selected)
+            notify("Removed $removed offline copies. Saved artwork is kept.")
+        }
+    }
+    fun removeDownload(id: Long) { viewModelScope.launch(Dispatchers.IO) {
+        try { artworkDownloads.remove(id) } catch (_: Exception) { notify("Could not remove this download. Try again.") }
+    } }
     fun retryDownload(record: ArtworkDownload) {
-        artworkDownloads.remove(record.downloadId)
-        queueDownloads(listOf(record.item), record.offline)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                artworkDownloads.remove(record.downloadId)
+                artworkDownloads.enqueue(record.item, record.offline)
+                notify("Download queued")
+            } catch (_: Exception) { notify("Could not queue this download. Check storage and try again.") }
+        }
     }
     fun openLibraryItems(index: Int, items: List<MediaItem>, offlineOnly: Boolean = false) {
+        val key = items.getOrNull(index)?.libraryKey
         val visible = items.filterNot { browsing.value.blocks(it) }
         val mapped = visible.mapNotNull { if (offlineOnly) artworkDownloads.localItem(it) else artworkDownloads.localItem(it, offlineOnly = false) ?: it }
-        if (mapped.isNotEmpty()) openLightbox(index.coerceIn(0, mapped.lastIndex), mapped)
+        if (mapped.isNotEmpty()) openLightbox(mapped.indexOfFirst { it.libraryKey == key }.coerceAtLeast(0), mapped)
         else notify("No readable offline copies. Retry the download from Library → Downloads.")
     }
     fun exportBackup(uri: Uri) {
@@ -989,6 +1057,99 @@ class MediaBrowserViewModel internal constructor(
         feedCache.clear(); closeLightbox(); loadHomeData(true)
         _pendingBackup.value = null
         notify("Backup merged. Re-enter API keys for imported authenticated sources.")
+    }
+
+    fun checkSourceHealth(source: MediaSourceConfig) {
+        if (source.id in checkingSources.value || sourceHealth.value[source.id]?.canRetry() == false) return
+        _checkingSources.value += source.id
+        healthJobs[source.id] = viewModelScope.launch {
+            try {
+                val result = apiClient.fetchMedia(source, "", 1)
+                if (!isActive || sources.value.none { it == source }) return@launch
+                val error = result.exceptionOrNull()
+                if (error is CancellationException) throw error
+                if (error == null) healthRepository.success(source.id) else healthRepository.failure(source.id, error)
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) { healthRepository.failure(source.id, e)
+            } finally { _checkingSources.value -= source.id }
+        }
+    }
+
+    fun openRelatedArtwork(displayItem: MediaItem, tag: String? = null) {
+        relatedJob?.cancel()
+        val seed = canonicalItem(displayItem)
+        val tags = RelatedArtwork.tags(seed, browsing.value)
+        val selected = tag?.takeIf { requested -> tags.any { it == requested } } ?: tags.firstOrNull()
+        val source = sources.value.firstOrNull { it.id == seed.sourceId }
+            ?: sources.value.filter { it.name == seed.sourceName }.singleOrNull()
+        val filters = homeState.value.filterState.let {
+            if (it.rating == MediaRating.ALL && seed.rating != MediaRating.UNKNOWN) it.copy(rating = seed.rating) else it
+        }
+        val pool = savedItems.value + homeState.value.rawItems + feedCache.values.flatMap { it.rawItems } + downloads.value.map { it.item }
+        val local = RelatedArtwork.rank(seed, applyClientFilters(pool, filters), browsing.value, tag)
+        _relatedArtwork.value = RelatedArtworkState(seed, source, tags, selected, filters, localItems = local)
+        loadMoreRelatedArtwork()
+    }
+
+    fun selectRelatedTag(tag: String) {
+        val current = _relatedArtwork.value ?: return
+        if (tag !in current.tags || current.selectedTag == tag) return
+        relatedJob?.cancel()
+        val pool = savedItems.value + homeState.value.rawItems + feedCache.values.flatMap { it.rawItems } + downloads.value.map { it.item }
+        _relatedArtwork.value = current.copy(selectedTag = tag, localItems = RelatedArtwork.rank(current.seed,
+            applyClientFilters(pool, current.filters), browsing.value, tag), remoteItems = emptyList(), loading = false,
+            error = null, nextPage = 1, reachedEnd = false)
+        loadMoreRelatedArtwork()
+    }
+
+    fun loadMoreRelatedArtwork() {
+        val current = _relatedArtwork.value ?: return
+        val source = current.source ?: return
+        val tag = current.selectedTag ?: return
+        if (current.loading || current.reachedEnd || source.searchParam.isBlank()) return
+        val health = sourceHealth.value[source.id]
+        if (health?.canRetry() == false) { _relatedArtwork.value = current.copy(error = health.condition.guidance); return }
+        _relatedArtwork.value = current.copy(loading = true, error = null)
+        relatedJob = viewModelScope.launch {
+            try {
+                val query = QueryBuilder.buildEffectiveQuery(tag, source, current.filters.mediaType, current.filters.rating)
+                val result = apiClient.fetchMedia(source, query, current.nextPage)
+                if (!isActive) return@launch
+                val error = result.exceptionOrNull()
+                if (error is CancellationException) throw error
+                if (error != null) {
+                    healthRepository.failure(source.id, error)
+                    _relatedArtwork.value = current.copy(loading = false, error = SourceRequestException.from(error).message)
+                    return@launch
+                }
+                healthRepository.success(source.id)
+                val fetched = result.getOrThrow()
+                val remote = RelatedArtwork.rank(current.seed, applyClientFilters(current.remoteItems + fetched, current.filters), browsing.value, tag)
+                val duplicatePage = current.nextPage > 1 && fetched.isNotEmpty() && remote.size == current.remoteItems.size
+                _relatedArtwork.value = current.copy(remoteItems = remote, nextPage = current.nextPage + 1,
+                    loading = false, reachedEnd = fetched.isEmpty() || duplicatePage || current.nextPage >= 10)
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                healthRepository.failure(source.id, e)
+                _relatedArtwork.value = current.copy(loading = false, error = SourceRequestException.from(e).message)
+            }
+        }
+    }
+
+    fun dismissRelatedArtwork() { relatedJob?.cancel(); _relatedArtwork.value = null }
+
+    fun openRelatedResult(item: MediaItem) {
+        val current = _relatedArtwork.value ?: return
+        val viewerIndex = lightboxIndex.value ?: return
+        val items = (current.localItems + current.remoteItems).distinctBy { it.libraryKey }.filterNot { browsing.value.blocks(it) }
+        val index = items.indexOfFirst { it.libraryKey == item.libraryKey }
+        if (index < 0) return
+        relatedJob?.cancel()
+        if (viewerReturns.size >= 5) viewerReturns.removeFirst()
+        viewerReturns.addLast(ViewerReturn(lightboxItems.value, viewerIndex, current.copy(loading = false)))
+        _relatedArtwork.value = current.copy(open = false, loading = false)
+        _lightboxItems.value = items.map { artworkDownloads.localItem(it) ?: it }
+        _lightboxIndex.value = index
     }
 
     private fun applyClientFilters(items: List<MediaItem>, filters: FilterState): List<MediaItem> {
