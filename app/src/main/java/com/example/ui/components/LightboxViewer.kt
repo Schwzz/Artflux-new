@@ -42,6 +42,7 @@ fun LightboxViewer(
     onClose: () -> Unit,
     onDownload: () -> Unit,
     onTagClick: (String) -> Unit,
+    onBlockTag: (String) -> Unit = {},
     isSaved: (String) -> Boolean = { false },
     onToggleSave: ((MediaItem) -> Unit)? = null,
     onOpenAddToCollection: ((MediaItem) -> Unit)? = null,
@@ -120,7 +121,7 @@ fun LightboxViewer(
         // Bottom Action Bar: Info, Share, Download (Comfortable spacing & system insets)
         LightboxBottomActionBar(
             item = currentItem,
-            isSaved = isSaved(currentItem.id),
+            isSaved = isSaved(currentItem.libraryKey),
             showInfoSheet = showInfoSheet,
             snackbarHostState = snackbarHostState,
             coroutineScope = coroutineScope,
@@ -145,6 +146,7 @@ fun LightboxViewer(
             MediaDetailsSheet(
                 item = currentItem,
                 onDismiss = { showInfoSheet = false },
+                onBlockTag = onBlockTag,
                 onTagClick = { tag ->
                     showInfoSheet = false
                     onClose()

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.example.model.MediaItem
 import com.example.model.ThumbnailQuality
 import com.example.ui.FeedState
+import com.example.ui.components.FeedPaginationFooter
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingSkeletonGrid
@@ -55,6 +56,7 @@ fun HomeScreen(
     onOpenFeedSettings: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
+    onLoadMore: () -> Unit = {},
     onResetFilters: () -> Unit,
     onOpenLightbox: (Int) -> Unit,
     onDownload: (MediaItem) -> Unit,
@@ -149,7 +151,7 @@ fun HomeScreen(
                         LoadingSkeletonGrid()
                     }
 
-                    homeState.errorMessage != null -> {
+                    homeState.errorMessage != null && homeState.mediaItems.isEmpty() -> {
                         ErrorStateView(
                             errorMessage = homeState.errorMessage,
                             onRetry = onRetry
@@ -159,7 +161,9 @@ fun HomeScreen(
                     homeState.mediaItems.isEmpty() -> {
                         EmptyStateView(
                             hasFilters = homeState.filterState.activeFilterCount > 0,
-                            onReset = onResetFilters
+                            onReset = onResetFilters,
+                            onLoadMore = onLoadMore.takeIf { !homeState.hasReachedEnd },
+                            paginationError = homeState.paginationError
                         )
                     }
 
@@ -176,7 +180,7 @@ fun HomeScreen(
                         ) {
                             itemsIndexed(
                                 items = homeState.mediaItems,
-                                key = { index, item -> "${item.id}_home_$index" }
+                                key = { _, item -> item.id }
                             ) { index, item ->
                                 MediaCard(
                                     item = item,
@@ -188,20 +192,13 @@ fun HomeScreen(
                                 )
                             }
 
-                            if (homeState.isLoadingMore) {
+                            if (!homeState.hasReachedEnd) {
                                 item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
+                                    FeedPaginationFooter(
+                                        isLoading = homeState.isLoadingMore,
+                                        error = homeState.paginationError,
+                                        onLoadMore = onLoadMore
+                                    )
                                 }
                             }
                         }

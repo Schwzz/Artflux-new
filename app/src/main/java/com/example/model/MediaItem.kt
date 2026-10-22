@@ -70,9 +70,9 @@ enum class AppTheme(val label: String) {
 }
 
 enum class ColorPalette(val label: String, val subtitle: String) {
-    ARCTIC_SIGNAL("Arctic Signal", "Electric Cyan, Violet & Coral"),
-    EMERALD_NOIR("Emerald Noir", "Emerald, Sapphire & Gold"),
-    CRIMSON_FLUX("Crimson Flux", "Crimson, Electric Blue & Amber");
+    ARCTIC_SIGNAL("Midnight", "Deep ink · cool cyan"),
+    EMERALD_NOIR("Slate", "Charcoal · soft lavender"),
+    CRIMSON_FLUX("Paper", "Warm white · quiet graphite");
 
     companion object {
         val DEFAULT = ARCTIC_SIGNAL
@@ -110,6 +110,7 @@ data class MediaItem(
     val height: Int? = null,
     val author: String? = null,
     val sourceName: String = "",
+    val sourceId: String = "",
     val description: String? = null,
     val fileSize: Long? = null,
     val fileExt: String? = null,
@@ -117,6 +118,8 @@ data class MediaItem(
     val favorites: Int? = null,
     val views: Int? = null
 ) {
+    val libraryKey: String get() = (sourceId.ifBlank { sourceName }.takeIf { it.isNotBlank() }?.let { "$it::" } ?: "") + id
+
     // Backward compatibility accessors for existing consumers
     val imageUrl: String get() = actualMediaUrl
     val thumbnailUrl: String get() = previewUrl
@@ -233,6 +236,7 @@ data class MediaItem(
         if (height != null) obj.put("height", height)
         if (author != null) obj.put("author", author)
         obj.put("sourceName", sourceName)
+        obj.put("sourceId", sourceId)
         if (description != null) obj.put("description", description)
         if (fileSize != null) obj.put("fileSize", fileSize)
         if (fileExt != null) obj.put("fileExt", fileExt)
@@ -271,6 +275,7 @@ data class MediaItem(
                 height = if (obj.has("height")) obj.getInt("height") else null,
                 author = obj.optString("author").ifBlank { null },
                 sourceName = obj.optString("sourceName", ""),
+                sourceId = obj.optString("sourceId", ""),
                 description = obj.optString("description").ifBlank { null },
                 fileSize = if (obj.has("fileSize")) obj.getLong("fileSize") else null,
                 fileExt = obj.optString("fileExt").ifBlank { null },

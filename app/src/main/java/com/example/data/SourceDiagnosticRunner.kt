@@ -5,6 +5,7 @@ import com.example.model.DiagnosticStep
 import com.example.model.MediaSourceConfig
 import com.example.model.SourceDiagnosticReport
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -61,14 +62,9 @@ class SourceDiagnosticRunner(private val client: OkHttpClient) {
         }
 
         val (httpCode, isHttpOk, httpMessage, bodyString) = try {
-            client.newCall(requestBuilder.build()).execute().use { response ->
-                ResponseSnapshot(
-                    code = response.code,
-                    isSuccessful = response.isSuccessful,
-                    message = response.message,
-                    bodyString = response.body?.string().orEmpty()
-                )
-            }
+            client.newCall(requestBuilder.build()).awaitBody()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext SourceDiagnosticReport(
                 isSuccess = false,
@@ -297,13 +293,6 @@ class SourceDiagnosticRunner(private val client: OkHttpClient) {
             sampleThumbUrl = firstParsed?.thumbnailUrl
         )
     }
-
-    private data class ResponseSnapshot(
-        val code: Int,
-        val isSuccessful: Boolean,
-        val message: String,
-        val bodyString: String
-    )
 
     companion object {
         fun detectAuthError(body: String): String? {

@@ -107,7 +107,7 @@ fun LightboxBottomActionBar(
                             }
                         },
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(if (isSaved) MaterialTheme.colorScheme.primary else Color.Transparent)
                             .testTag("lightbox_save_button")
@@ -125,7 +125,7 @@ fun LightboxBottomActionBar(
                 IconButton(
                     onClick = onToggleInfoSheet,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(if (showInfoSheet) MaterialTheme.colorScheme.primary else Color.Transparent)
                         .testTag("lightbox_info_button")
@@ -149,7 +149,7 @@ fun LightboxBottomActionBar(
                         context.startActivity(Intent.createChooser(sendIntent, "Share Media Link"))
                     },
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .testTag("lightbox_share_button")
                 ) {
@@ -165,7 +165,7 @@ fun LightboxBottomActionBar(
                 IconButton(
                     onClick = onDownload,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary)
                         .testTag("lightbox_download_button")

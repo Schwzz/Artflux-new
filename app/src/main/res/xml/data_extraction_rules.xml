@@ -2,8 +2,12 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="artflux_secure_credentials.xml" />
+        <exclude domain="sharedpref" path="artflux_downloads.xml" />
+        <exclude domain="external" path="Download/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="artflux_secure_credentials.xml" />
+        <exclude domain="sharedpref" path="artflux_downloads.xml" />
+        <exclude domain="external" path="Download/" />
     </device-transfer>
 </data-extraction-rules>

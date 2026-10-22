@@ -8,9 +8,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
-class SourceRepository(private val context: Context) {
+class SourceRepository internal constructor(
+    context: Context,
+    private val credentialVault: SourceCredentialVault
+) {
+    constructor(context: Context) : this(context, SourceCredentialVault(context))
     private val prefs = context.getSharedPreferences("media_browser_sources", Context.MODE_PRIVATE)
-    private val credentialVault = SourceCredentialVault(context)
     private val _sources = MutableStateFlow<List<MediaSourceConfig>>(emptyList())
     val sources: StateFlow<List<MediaSourceConfig>> = _sources.asStateFlow()
 
@@ -22,6 +25,7 @@ class SourceRepository(private val context: Context) {
         val savedJson = prefs.getString("custom_sources", null)
         val customSources = mutableListOf<MediaSourceConfig>()
         var needsMigrationResave = false
+        var migrationFailed = false
 
         if (!savedJson.isNullOrBlank()) {
             try {
@@ -40,10 +44,14 @@ class SourceRepository(private val context: Context) {
                     val vaultCreds = credentialVault.getCredentials(rawConfig.id)
                     val effectiveCreds = if (legacyCreds.hasCredentials && !vaultCreds.hasCredentials) {
                         // Migrate legacy credentials into secure vault
-                        credentialVault.saveCredentials(rawConfig.id, legacyCreds)
-                        needsMigrationResave = true
+                        if (credentialVault.saveCredentials(rawConfig.id, legacyCreds)) {
+                            needsMigrationResave = true
+                        } else {
+                            migrationFailed = true
+                        }
                         legacyCreds
                     } else if (vaultCreds.hasCredentials) {
+                        if (legacyCreds.hasCredentials) needsMigrationResave = true
                         vaultCreds
                     } else {
                         legacyCreds
@@ -62,7 +70,7 @@ class SourceRepository(private val context: Context) {
             }
         }
 
-        if (needsMigrationResave) {
+        if (needsMigrationResave && !migrationFailed) {
             // Re-save without plaintext credentials in ordinary SharedPreferences
             saveCustomSourcesInternal(customSources)
         }
@@ -71,32 +79,32 @@ class SourceRepository(private val context: Context) {
         _sources.value = allSources
     }
 
-    fun addSource(source: MediaSourceConfig) {
-        // Save sensitive credentials into secure vault
-        val creds = SourceCredentials(
-            apiKey = source.apiKey,
-            authHeaderValue = source.authHeaderValue,
-            authQueryParams = source.authQueryParams
-        )
-        credentialVault.saveCredentials(source.id, creds)
-
+    fun addSource(source: MediaSourceConfig): Boolean {
         val currentCustom = _sources.value.filter { !it.isBuiltIn }.toMutableList()
         currentCustom.removeAll { it.id == source.id }
         currentCustom.add(0, source)
-        saveCustomSourcesInternal(currentCustom)
+        return saveCustomSourcesInternal(currentCustom)
     }
 
-    fun updateSource(source: MediaSourceConfig) {
-        addSource(source)
-    }
+    fun mergeSources(sources: List<MediaSourceConfig>): Boolean =
+        saveCustomSourcesInternal((_sources.value.filterNot { it.isBuiltIn } + sources).distinctBy { it.id })
 
-    fun deleteSource(sourceId: String) {
-        credentialVault.deleteCredentials(sourceId)
+    fun updateSource(source: MediaSourceConfig): Boolean = addSource(source)
+
+    fun deleteSource(sourceId: String): Boolean {
         val currentCustom = _sources.value.filter { !it.isBuiltIn && it.id != sourceId }
-        saveCustomSourcesInternal(currentCustom)
+        if (!saveCustomSourcesInternal(currentCustom)) return false
+        credentialVault.deleteCredentials(sourceId)
+        return true
     }
 
-    private fun saveCustomSourcesInternal(customSources: List<MediaSourceConfig>) {
+    private fun saveCustomSourcesInternal(customSources: List<MediaSourceConfig>): Boolean {
+        // Verify every credential before removing plaintext from the complete source list.
+        // This also protects a pending legacy migration when another source is edited.
+        for (source in customSources) {
+            val credentials = SourceCredentials(source.apiKey, source.authHeaderValue, source.authQueryParams)
+            if (!credentialVault.saveCredentials(source.id, credentials)) return false
+        }
         val array = JSONArray()
         for (source in customSources) {
             // Store non-sensitive configuration in ordinary SharedPreferences.
@@ -108,8 +116,9 @@ class SourceRepository(private val context: Context) {
             )
             array.put(nonSensitiveConfig.toJson())
         }
-        prefs.edit().putString("custom_sources", array.toString()).apply()
+        if (!prefs.edit().putString("custom_sources", array.toString()).commit()) return false
         _sources.value = MediaSourceConfig.DEFAULT_SOURCES + customSources
+        return true
     }
 
     fun getSourceById(id: String): MediaSourceConfig? {

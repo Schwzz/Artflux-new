@@ -8,12 +8,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
-import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 
 data class SourceCredentials(
     val apiKey: String = "",
@@ -31,16 +29,19 @@ data class SourceCredentials(
  * Keeps credentials isolated from non-sensitive source configuration, encrypting values
  * using AES-GCM and storing them in private storage.
  */
-class SourceCredentialVault(private val context: Context) {
+class SourceCredentialVault internal constructor(
+    context: Context,
+    private val keyProvider: (() -> SecretKey)?
+) {
+    constructor(context: Context) : this(context, null)
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val secretKey: SecretKey by lazy { getOrCreateSecretKey() }
+    private val secretKey: SecretKey by lazy { keyProvider?.invoke() ?: getOrCreateSecretKey() }
 
     fun saveCredentials(sourceId: String, credentials: SourceCredentials): Boolean {
         if (!credentials.hasCredentials) {
-            deleteCredentials(sourceId)
-            return true
+            return deleteCredentials(sourceId)
         }
 
         return try {
@@ -56,7 +57,6 @@ class SourceCredentialVault(private val context: Context) {
 
             val encrypted = encrypt(json.toString())
             prefs.edit().putString(KEY_PREFIX + sourceId, encrypted).commit()
-            true
         } catch (e: Exception) {
             // Never fall back to plaintext or Base64 encoding.
             // On failure, return false and do not write insecure data.
@@ -89,9 +89,8 @@ class SourceCredentialVault(private val context: Context) {
         }
     }
 
-    fun deleteCredentials(sourceId: String) {
-        prefs.edit().remove(KEY_PREFIX + sourceId).apply()
-    }
+    fun deleteCredentials(sourceId: String): Boolean =
+        prefs.edit().remove(KEY_PREFIX + sourceId).commit()
 
     fun clearAll() {
         prefs.edit().clear().apply()
@@ -128,21 +127,10 @@ class SourceCredentialVault(private val context: Context) {
     }
 
     private fun getOrCreateSecretKey(): SecretKey {
-        return try {
-            val keyStore = KeyStore.getInstance("AndroidKeyStore")
-            keyStore.load(null)
-            if (keyStore.containsAlias(KEYSTORE_ALIAS)) {
-                val entry = keyStore.getEntry(KEYSTORE_ALIAS, null) as? KeyStore.SecretKeyEntry
-                if (entry != null) {
-                    return entry.secretKey
-                }
-            }
-            // If running in Android runtime with KeyStore support
-            generateKeyStoreKey()
-        } catch (e: Throwable) {
-            // Fallback for Robolectric/JVM unit tests without hardware KeyStore provider
-            getFallbackJvmKey()
-        }
+        val keyStore = KeyStore.getInstance("AndroidKeyStore")
+        keyStore.load(null)
+        val entry = keyStore.getEntry(KEYSTORE_ALIAS, null) as? KeyStore.SecretKeyEntry
+        return entry?.secretKey ?: generateKeyStoreKey()
     }
 
     private fun generateKeyStoreKey(): SecretKey {
@@ -157,14 +145,6 @@ class SourceCredentialVault(private val context: Context) {
             .build()
         keyGenerator.init(keyGenParameterSpec)
         return keyGenerator.generateKey()
-    }
-
-    private fun getFallbackJvmKey(): SecretKey {
-        // App-specific salt + package identifier for private offline encryption in JVM/Robolectric
-        val seed = "${context.packageName}.artflux.vault.seed.v1"
-        val md = MessageDigest.getInstance("SHA-256")
-        val keyBytes = md.digest(seed.toByteArray(StandardCharsets.UTF_8))
-        return SecretKeySpec(keyBytes, "AES")
     }
 
     companion object {

@@ -1,158 +1,42 @@
 package com.example.ui.theme
 
 import android.app.Activity
-import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.example.model.AppTheme
 import com.example.model.ColorPalette
 
-private val ArcticSignalDarkColorScheme = darkColorScheme(
-    primary = ArcticSignalPrimaryDark,
-    onPrimary = ArcticSignalOnPrimaryDark,
-    primaryContainer = ArcticSignalPrimaryContainerDark,
-    onPrimaryContainer = ArcticSignalOnPrimaryContainerDark,
-    secondary = ArcticSignalSecondaryDark,
-    onSecondary = ArcticSignalOnSecondaryDark,
-    secondaryContainer = ArcticSignalSecondaryContainerDark,
-    onSecondaryContainer = ArcticSignalOnSecondaryContainerDark,
-    tertiary = ArcticSignalTertiaryDark,
-    background = ArcticSignalBackgroundDark,
-    onBackground = TextPrimaryDark,
-    surface = ArcticSignalSurfaceDark,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = ArcticSignalSurfaceVariantDark,
-    onSurfaceVariant = TextSecondaryDark,
-    outline = ArcticSignalOutlineDark
-)
-
-private val ArcticSignalLightColorScheme = lightColorScheme(
-    primary = ArcticSignalPrimaryLight,
-    onPrimary = ArcticSignalOnPrimaryLight,
-    primaryContainer = ArcticSignalPrimaryContainerLight,
-    onPrimaryContainer = ArcticSignalOnPrimaryContainerLight,
-    secondary = ArcticSignalSecondaryLight,
-    onSecondary = ArcticSignalOnSecondaryLight,
-    secondaryContainer = ArcticSignalSecondaryContainerLight,
-    onSecondaryContainer = ArcticSignalOnSecondaryContainerLight,
-    tertiary = ArcticSignalTertiaryLight,
-    background = ArcticSignalBackgroundLight,
-    onBackground = TextPrimaryLight,
-    surface = ArcticSignalSurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = ArcticSignalSurfaceVariantLight,
-    onSurfaceVariant = TextSecondaryLight,
-    outline = ArcticSignalOutlineLight
-)
-
-private val EmeraldNoirDarkColorScheme = darkColorScheme(
-    primary = EmeraldNoirPrimaryDark,
-    onPrimary = EmeraldNoirOnPrimaryDark,
-    primaryContainer = EmeraldNoirPrimaryContainerDark,
-    onPrimaryContainer = EmeraldNoirOnPrimaryContainerDark,
-    secondary = EmeraldNoirSecondaryDark,
-    onSecondary = EmeraldNoirOnSecondaryDark,
-    secondaryContainer = EmeraldNoirSecondaryContainerDark,
-    onSecondaryContainer = EmeraldNoirOnSecondaryContainerDark,
-    tertiary = EmeraldNoirTertiaryDark,
-    background = EmeraldNoirBackgroundDark,
-    onBackground = TextPrimaryDark,
-    surface = EmeraldNoirSurfaceDark,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = EmeraldNoirSurfaceVariantDark,
-    onSurfaceVariant = TextSecondaryDark,
-    outline = EmeraldNoirOutlineDark
-)
-
-private val EmeraldNoirLightColorScheme = lightColorScheme(
-    primary = EmeraldNoirPrimaryLight,
-    onPrimary = EmeraldNoirOnPrimaryLight,
-    primaryContainer = EmeraldNoirPrimaryContainerLight,
-    onPrimaryContainer = EmeraldNoirOnPrimaryContainerLight,
-    secondary = EmeraldNoirSecondaryLight,
-    onSecondary = EmeraldNoirOnSecondaryLight,
-    secondaryContainer = EmeraldNoirSecondaryContainerLight,
-    onSecondaryContainer = EmeraldNoirOnSecondaryContainerLight,
-    tertiary = EmeraldNoirTertiaryLight,
-    background = EmeraldNoirBackgroundLight,
-    onBackground = TextPrimaryLight,
-    surface = EmeraldNoirSurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = EmeraldNoirSurfaceVariantLight,
-    onSurfaceVariant = TextSecondaryLight,
-    outline = EmeraldNoirOutlineLight
-)
-
-private val CrimsonFluxDarkColorScheme = darkColorScheme(
-    primary = CrimsonFluxPrimaryDark,
-    onPrimary = CrimsonFluxOnPrimaryDark,
-    primaryContainer = CrimsonFluxPrimaryContainerDark,
-    onPrimaryContainer = CrimsonFluxOnPrimaryContainerDark,
-    secondary = CrimsonFluxSecondaryDark,
-    onSecondary = CrimsonFluxOnSecondaryDark,
-    secondaryContainer = CrimsonFluxSecondaryContainerDark,
-    onSecondaryContainer = CrimsonFluxOnSecondaryContainerDark,
-    tertiary = CrimsonFluxTertiaryDark,
-    background = CrimsonFluxBackgroundDark,
-    onBackground = TextPrimaryDark,
-    surface = CrimsonFluxSurfaceDark,
-    onSurface = TextPrimaryDark,
-    surfaceVariant = CrimsonFluxSurfaceVariantDark,
-    onSurfaceVariant = TextSecondaryDark,
-    outline = CrimsonFluxOutlineDark
-)
-
-private val CrimsonFluxLightColorScheme = lightColorScheme(
-    primary = CrimsonFluxPrimaryLight,
-    onPrimary = CrimsonFluxOnPrimaryLight,
-    primaryContainer = CrimsonFluxPrimaryContainerLight,
-    onPrimaryContainer = CrimsonFluxOnPrimaryContainerLight,
-    secondary = CrimsonFluxSecondaryLight,
-    onSecondary = CrimsonFluxOnSecondaryLight,
-    secondaryContainer = CrimsonFluxSecondaryContainerLight,
-    onSecondaryContainer = CrimsonFluxOnSecondaryContainerLight,
-    tertiary = CrimsonFluxTertiaryLight,
-    background = CrimsonFluxBackgroundLight,
-    onBackground = TextPrimaryLight,
-    surface = CrimsonFluxSurfaceLight,
-    onSurface = TextPrimaryLight,
-    surfaceVariant = CrimsonFluxSurfaceVariantLight,
-    onSurfaceVariant = TextSecondaryLight,
-    outline = CrimsonFluxOutlineLight
-)
+/** Three complete, fixed themes. Stored palette IDs are retained for existing installs. */
+fun artfluxColorScheme(palette: ColorPalette): ColorScheme = when (palette) {
+    ColorPalette.ARCTIC_SIGNAL -> darkColorScheme(
+        primary = Color(0xFF8BDDD4), onPrimary = Color(0xFF052B29), primaryContainer = Color(0xFF193D3A), onPrimaryContainer = Color(0xFFB8EEE8),
+        secondary = Color(0xFFBFC6E5), background = Color(0xFF101318), onBackground = Color(0xFFE5E7EE),
+        surface = Color(0xFF181C23), onSurface = Color(0xFFE5E7EE), surfaceVariant = Color(0xFF242A34),
+        onSurfaceVariant = Color(0xFFADB5C5), outline = Color(0xFF48515F), surfaceContainer = Color(0xFF1D222B))
+    ColorPalette.EMERALD_NOIR -> darkColorScheme(
+        primary = Color(0xFFBBB5FF), onPrimary = Color(0xFF29234F), primaryContainer = Color(0xFF3E3963), onPrimaryContainer = Color(0xFFE5DFFF),
+        secondary = Color(0xFFB8C6D8), background = Color(0xFF202127), onBackground = Color(0xFFF0EFF5),
+        surface = Color(0xFF292A32), onSurface = Color(0xFFF0EFF5), surfaceVariant = Color(0xFF353640),
+        onSurfaceVariant = Color(0xFFC0BFCB), outline = Color(0xFF555562), surfaceContainer = Color(0xFF30313A))
+    ColorPalette.CRIMSON_FLUX -> lightColorScheme(
+        primary = Color(0xFF385C50), onPrimary = Color.White, primaryContainer = Color(0xFFDCEAE2), onPrimaryContainer = Color(0xFF17372B),
+        secondary = Color(0xFF64605A), background = Color(0xFFF8F7F3), onBackground = Color(0xFF242622),
+        surface = Color(0xFFFEFDFA), onSurface = Color(0xFF242622), surfaceVariant = Color(0xFFECEBE5),
+        onSurfaceVariant = Color(0xFF585B53), outline = Color(0xFF777B71), surfaceContainer = Color(0xFFF0EFE9))
+}
 
 @Composable
-fun ArtfluxTheme(
-    theme: AppTheme = AppTheme.DARK,
-    colorPalette: ColorPalette = ColorPalette.ARCTIC_SIGNAL,
-    content: @Composable () -> Unit
-) {
-    val isLight = theme == AppTheme.LIGHT
-    val colorScheme: ColorScheme = when (colorPalette) {
-        ColorPalette.ARCTIC_SIGNAL -> if (isLight) ArcticSignalLightColorScheme else ArcticSignalDarkColorScheme
-        ColorPalette.EMERALD_NOIR -> if (isLight) EmeraldNoirLightColorScheme else EmeraldNoirDarkColorScheme
-        ColorPalette.CRIMSON_FLUX -> if (isLight) CrimsonFluxLightColorScheme else CrimsonFluxDarkColorScheme
-    }
-
+fun ArtfluxTheme(theme: AppTheme = AppTheme.DARK, colorPalette: ColorPalette = ColorPalette.ARCTIC_SIGNAL, content: @Composable () -> Unit) {
     val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as? Activity)?.window
-            if (window != null) {
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = isLight
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = isLight
-            }
+    val isLight = colorPalette == ColorPalette.CRIMSON_FLUX
+    if (!view.isInEditMode) SideEffect {
+        (view.context as? Activity)?.window?.let {
+            WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = isLight
+            WindowCompat.getInsetsController(it, view).isAppearanceLightNavigationBars = isLight
         }
     }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    MaterialTheme(colorScheme = artfluxColorScheme(colorPalette), typography = Typography, content = content)
 }

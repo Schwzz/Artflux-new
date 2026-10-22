@@ -292,7 +292,7 @@ fun SavesAndCollectionsScreen(
                         ) {
                             items(collections, key = { it.id }) { collection ->
                                 // Find cover image from collection's contents
-                                val coverItem = savedItems.firstOrNull { it.id in collection.mediaIds && it.previewUrl.isNotBlank() }
+                                val coverItem = savedItems.firstOrNull { it.libraryKey in collection.mediaIds && it.previewUrl.isNotBlank() }
                                 
                                 CollectionCard(
                                     collection = collection,

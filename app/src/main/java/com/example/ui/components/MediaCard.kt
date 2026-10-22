@@ -67,11 +67,7 @@ fun MediaCard(
 
     // Primary URL selection respecting deterministic preview contract:
     // Feed strictly uses static previewUrl; never loads raw video media
-    val primaryDisplayUrl = if (!MediaApiClient.isVideoUrl(item.previewUrl) && item.previewUrl.isNotBlank()) {
-        item.previewUrl
-    } else {
-        item.getThumbnailForQuality(quality).takeIf { !MediaApiClient.isVideoUrl(it) }.orEmpty()
-    }
+    val primaryDisplayUrl = item.getThumbnailForQuality(quality).takeIf { !MediaApiClient.isVideoUrl(it) }.orEmpty()
     val fallbackDisplayUrl = item.getThumbnailFallbackUrl(quality).takeIf { !MediaApiClient.isVideoUrl(it) }.orEmpty()
 
     var isPrimaryFailed by remember(item.id, quality) { mutableStateOf(false) }
