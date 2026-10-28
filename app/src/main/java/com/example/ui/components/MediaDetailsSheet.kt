@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,12 +61,13 @@ import com.example.model.MediaRating
 import com.example.ui.theme.EmeraldSafe
 import com.example.ui.theme.RoseBadge
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun MediaDetailsSheet(
     item: MediaItem,
     onDismiss: () -> Unit,
     onTagClick: (String) -> Unit,
+    onBlockTag: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -102,7 +105,7 @@ fun MediaDetailsSheet(
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .testTag("details_close_button")
@@ -373,7 +376,7 @@ fun MediaDetailsSheet(
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(6.dp))
-                            .clickable { onTagClick(tag) }
+                            .combinedClickable(onClick = { onTagClick(tag) }, onLongClick = { onBlockTag(tag) })
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             .testTag("detail_tag_chip_$tag")
                         ) {

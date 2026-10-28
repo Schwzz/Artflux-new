@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 object MediaResponseParser {
 
-    fun parseMediaItems(source: MediaSourceConfig, body: String): List<MediaItem> {
+    fun parseMediaItems(source: MediaSourceConfig, body: String, strict: Boolean = false): List<MediaItem> {
         val trimmed = body.trim()
         val itemsArray: JSONArray = if (trimmed.startsWith("[")) {
             JSONArray(trimmed)
@@ -23,9 +23,10 @@ object MediaResponseParser {
                     rootObj.has("results") -> rootObj.optJSONArray("results")
                     rootObj.has("images") -> rootObj.optJSONArray("images")
                     else -> null
-                } ?: JSONArray()
+                } ?: if (strict) throw org.json.JSONException("No results array") else JSONArray()
             } else {
-                JsonPathExtractor.extractNestedJsonArray(rootObj, source.itemsPath) ?: JSONArray()
+                JsonPathExtractor.extractNestedJsonArray(rootObj, source.itemsPath)
+                    ?: if (strict) throw org.json.JSONException("Configured results path was not found") else JSONArray()
             }
         }
 
@@ -37,6 +38,7 @@ object MediaResponseParser {
                 result.add(item)
             }
         }
+        if (strict && itemsArray.length() > 0 && result.isEmpty()) throw org.json.JSONException("No mapped media URLs")
         return result
     }
 
@@ -51,7 +53,7 @@ object MediaResponseParser {
 
         val id = JsonPathExtractor.extractValue(obj, "id").ifBlank {
             JsonPathExtractor.extractValue(obj, "image_id").ifBlank {
-                JsonPathExtractor.extractValue(obj, "signature").ifBlank { "item-${source.id}-$index" }
+                JsonPathExtractor.extractValue(obj, "signature").ifBlank { java.security.MessageDigest.getInstance("SHA-256").digest(finalImage.toByteArray()).joinToString("") { "%02x".format(it) }.take(24) }
             }
         }
         val title = JsonPathExtractor.extractValue(obj, source.titleField).ifBlank {
@@ -174,6 +176,7 @@ object MediaResponseParser {
             height = height,
             author = author,
             sourceName = source.name,
+            sourceId = source.id,
             description = obj.optString("alt_text", obj.optString("description", "")).ifBlank { null },
             fileSize = fileSize,
             fileExt = resolvedFileExt,

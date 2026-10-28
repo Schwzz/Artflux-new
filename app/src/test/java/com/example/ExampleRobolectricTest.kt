@@ -1417,7 +1417,8 @@ class ExampleRobolectricTest {
   @Test
   fun testCustomSourceCredentialSecurityAndMigration() {
     val context = ApplicationProvider.getApplicationContext<Application>()
-    val repo = com.example.data.SourceRepository(context)
+    val testKey = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+    val repo = com.example.data.SourceRepository(context, com.example.data.SourceCredentialVault(context) { testKey })
 
     val secretSource = MediaSourceConfig(
       id = "secure_source_99",
@@ -1482,7 +1483,8 @@ class ExampleRobolectricTest {
   @Test
   fun testSourceCredentialVaultSecurityAndNoBase64Fallback() {
     val context = ApplicationProvider.getApplicationContext<Application>()
-    val vault = com.example.data.SourceCredentialVault(context)
+    val testKey = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+    val vault = com.example.data.SourceCredentialVault(context) { testKey }
     val sourceId = "test_vault_source_1"
 
     val creds = com.example.data.SourceCredentials(
